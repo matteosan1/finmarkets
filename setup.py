@@ -6,9 +6,9 @@ long_description = (this_directory / "README.md").read_text()
 
 setup(
     name='finmarkets',
-    version='1.0.0',    
+    version='1.0.1',    
     description='A collection of financial tools developed during Financial Markets course at UniSi.',
-    #url='https://github.com/shuds13/pyexample',
+    url='https://github.com/matteosan1/finmarkets',
     long_description = long_description,
     long_description_content_type = 'text/markdown',
     #requires-python = ">=3.7"

@@ -1,9 +1,0 @@
-LICENSE
-README.rst
-finmarkets.py
-setup.py
-finmarkets.egg-info/PKG-INFO
-finmarkets.egg-info/SOURCES.txt
-finmarkets.egg-info/dependency_links.txt
-finmarkets.egg-info/requires.txt
-finmarkets.egg-info/top_level.txt
