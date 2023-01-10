@@ -1,0 +1,14 @@
+Metadata-Version: 2.1
+Name: finmarkets
+Version: 1.0.0
+Summary: A collection of financial tools developed during Financial Markets course at UniSi.
+Author: Matteo Sani
+Author-email: matteo.sani@mpscapitalservices.it
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Education
+Classifier: License :: Free For Educational Use
+Classifier: Programming Language :: Python :: 3
+Classifier: Natural Language :: English
+Classifier: Topic :: Office/Business :: Financial
+License-File: LICENSE
