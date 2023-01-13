@@ -7,14 +7,85 @@ from scipy.interpolate import interp1d
 from datetime import date
 from dateutil.relativedelta import relativedelta
 
-def bond_value(N, C, r, maturity):
-    value = 0
-    for t in range(1, maturity+1):
-        value += N*C*1/(1+r)**t
-    value += N*1/(1+r)**t
-    return value
+def maturity_from_str(maturity_str):
+    tag = maturity_str[-1].lower()
+    maturity = int(maturity[:-1])
+    if tag == "y":
+        return maturity*12
+    elif tag == "m":
+        return maturity
+    elif tag == "d":
+        return maturity//30
+    else:
+        raise ValueError("Unrecognized label {}".format(tag))
 
-def generate_dates(start_date, maturity_months, tenor_months=12):
+class Bond:
+    """
+    Bond - class to price bonds.
+
+    Params:
+    -------
+    face_value: float
+        Face value of the bond.
+    start_date: datetime.date
+        Start date of the contract.
+    maturity: str
+        Maturity of the bond.
+    coupon: float or list(float)
+        Coupons of the bond.
+    tenor: str
+        Tenor of the coupon.
+    """
+    def __init__(self, face_value, start_date, maturity, coupon, tenor):
+        self.FV = face_value
+        self.C = coupon
+        self.tau = maturity_from_str(tenor)/12
+        self.payment_dates = generate_dates(start_date, maturity, tenor)
+
+    def npv(self, dc):
+        """
+        npv - computes the bond NPV.
+        
+        Params:
+        -------
+        dc: DiscountCurve
+          Discount curve to be used in the pricing.
+        """
+        val = 0
+        for i in range(1, len(self.payment_dates)):
+            val += self.C*self.tau*dc.df(self.payment_dates[i])
+        val += dc.df(self.payment_dates[-1])
+        return self.FV*val
+
+    def loss(self, dc, def_date):
+        """
+        npv - computes the bond NPV.
+        
+        Params:
+        -------
+        dc: DiscountCurve
+          Discount curve to be used in the pricing.
+        def_date: datetime.date
+          Simulated default date of the bond.
+        """
+        val = 0
+        for i in range(1, len(self.payment_dates)):
+            if self.payment_dates[i-1] <= def_date < self.payment_dates[i]:
+                rateo = (self.payment_dates[i] - def_date).days/(self.payment_dates[i] - self.payment_dates[i-1]).days
+                val += self.C*rateo*self.tau*dc.df(def_date)
+            elif self.payment_dates[i] > def_date:  
+                val += self.C*self.tau*dc.df(self.payment_dates[i])
+        val += dc.df(self.payment_dates[-1])
+        return self.FV*val
+                
+#def bond_value(N, C, r, maturity):
+#    value = 0
+#    for t in range(1, maturity+1):
+#        value += N*C*1/(1+r)**t
+#    value += N*1/(1+r)**t
+#    return value
+
+def generate_dates(start_date, maturity, tenor="1y"):
     """
     generate_swap_dates: computes a set of dates given starting date and length in months.
                          The tenor is by construction 12 months.
@@ -23,11 +94,13 @@ def generate_dates(start_date, maturity_months, tenor_months=12):
     -------
     start_date: datetime.date
         The start date of the set of dates.
-    n_months: int
-        Number of months that define the length of the list of dates.
-    tenor_months: int
-        Set the tenor of the list of dates, by default it is 12 months.
+    maturity: str
+        Maturity that define the length of the list of dates.
+    tenor: str
+        Tenor of the list of dates, by default it is 12 months.
     """
+    maturity_monts = maturity_from_str(maturity)
+    tenor_months = maturity_from_str(tenor)
     dates = []
     for d in range(0, maturity_months, tenor_months):
         dates.append(start_date + relativedelta(months=d))
@@ -40,16 +113,19 @@ class DiscountCurve:
 
     Attributes:
     -----------
-    pillar_dates: list of datetime.date
+    obs_date: datetime.date
+        Observation date.
+    pillar_dates: list(datetime.date)
         List of pillars of the discount curve.
-    discount_factors: list of float
+    discount_factors: list(float)
         List of the actual discount factors.
     """
-    def __init__(self, pillar_dates, discount_factors):
-        self.pillar_dates = pillar_dates
-        self.discount_factors = discount_factors
+    def __init__(self, obs_date, pillar_dates, discount_factors):
+        self.obs_date = obs_date
+        self.pillar_dates = [obs_date] + pillar_dates
+        self.discount_factors = [1.] + discount_factors
         self.log_discount_factors = [np.log(discount_factor) for discount_factor in self.discount_factors]
-        self.pillar_days = [(pillar_date - self.today).days for pillar_date in self.pillar_dates]
+        self.pillar_days = [(pillar_date - obs_date).days for pillar_date in self.pillar_dates]
         
     def df(self, d):
         """
@@ -60,7 +136,10 @@ class DiscountCurve:
         d: datetime.date
             The actual date at which we would like the interpolated discount factor.
         """
-        d_days = (d - self.today).days
+        d_days = (d - self.obs_date).days
+        if d_days < self.obs_date or d_days > self.pillar_days[-1]:
+            print ("Cannot extrapolate discount factors.")
+            return None
         interpolated_log_discount_factor = np.interp(d_days, self.pillar_days, self.log_discount_factors)
         return np.exp(interpolated_log_discount_factor)
     
@@ -72,27 +151,44 @@ class DiscountCurve:
         -------
         d: datetime.date
         """
-        return -np.log(self.df(d))/((d-self.pillar_dates[0]).days/365) 
+        return -np.log(self.df(d))/((d-self.obs_date).days/365) 
 
-def makeDCFromDataFrame(df, pillar_col='months', data_col='dfs'):
-    pillars = [today + relativedelta(months=i) for i in df['months']]
-    dfs = df['dfs']
-    return DiscountCurve(pillars, dfs)
+def makeDCFromDataFrame(df, obs_date, pillar_col='months', df_col='dfs'):
+    """
+    makeDCFromDataFrame - utility to create a DiscountCurve object from a pandas.DataFrame.
     
+    Params:
+    -------
+    df: pandas.DataFrame
+        Input pandas.DataFrame.
+    obs_date: datetime.date
+        Observation date.
+    pillar_col: str
+        Name of the pillar column in df, default is 'months'.
+    df_col: str
+        Name of discount factors column in df, default is 'dfs'.
+    """
+    pillars = [today + relativedelta(months=i) for i in df[pillar_col]]
+    dfs = df[df_col]
+    return DiscountCurve(obs_date, pillars, dfs)
+
 class ForwardRateCurve:
     """
     ForwardRateCurve: container for a forward rate curve.
 
     Attributes:
     -----------
+    obs_date: datetime.date
+        Observation date.
     pillar_dates: list of datetime.date
         List of pillars of the forward rate curve.
     pillar_rates: list of rates
         List of rates of the forward curve.
     """
-    def __init__(self, pillars, rates):
+    def __init__(self, obs_date, pillars, rates):
+        self.obs_date = obs_date
         self.pillars = pillars
-        self.pillar_days = [(p-pillars[0]).days/365 for p in pillars]
+        self.pillar_days = [(p - obs_date).days/365 for p in pillars]
         self.rates = rates
 
     def interp_rate(self, d):
@@ -104,8 +200,8 @@ class ForwardRateCurve:
         d : datetime.date
             The date of the interpolated rate.
         """
-        d_frac = (d-self.pillars[0]).days/365
-        if d_frac < self.pillar_days[0] or d_frac > self.pillar_days[-1]:
+        d_frac = (d - self.obs_date).days/365
+        if d_frac < self.obs_date or d_frac > self.pillar_days[-1]:
             print ("Cannot extrapolate rates.")
             return None, None
         else:
@@ -120,7 +216,6 @@ class ForwardRateCurve:
         d1, d2: datetime.date
             The start and end time of the period.
         """
-    
         d1_frac, r1 = self.interp_rate(d1)
         d2_frac, r2 = self.interp_rate(d2)
         if d1_frac is None or d2_frac is None:
@@ -137,16 +232,16 @@ class OvernightIndexSwap:
     notional: float
         Notional of the swap.
     start_date: datetime.date
-        Start date of the swap
+         Start date of the swap
+    maturity: str
+        Maturity of the swap.
     fixed_rate: float
         Rate of the fixed leg of the swap.
-    maturity_years: int
-        Maturity of the swap in years.
     """
-    def __init__(self, nominal, start_date, fixed_rate, maturity_years):
+    def __init__(self, nominal, start_date, maturity, fixed_rate):
         self.nominal = nominal
         self.fixed_rate = fixed_rate
-        self.payment_dates = generate_dates(start_date, maturity_years*12)
+        self.payment_dates = generate_dates(start_date, maturity)
       
     def npv_floating(self, dc):
         """
@@ -286,18 +381,18 @@ class InterestRateSwap:
         Nominal of the swap.
     start_date: datetime.date
         Starting date of the contract.
+    maturity: str
+        Maturity of the swap.
     fixed_rate: float
         Rate of the fixed leg of the swap.
-    tenor_months: int
-        Tenor of the contract in months.
-    maturity_years: int
-        Maturity of the swap in years.
+    tenor: str
+        Tenor of the contract.
     """    
-    def __init__(self, nominal, start_date, fixed_rate, tenor_months, maturity_years):
+    def __init__(self, nominal, start_date, maturity, fixed_rate, tenor):
         self.nominal = nominal
         self.fixed_rate = fixed_rate
-        self.fixed_leg_dates = generate_dates(start_date, 12 * maturity_years)
-        self.floating_leg_dates = generate_dates(start_date, 12 * maturity_years, tenor_months)
+        self.fixed_leg_dates = generate_dates(start_date, maturity)
+        self.floating_leg_dates = generate_dates(start_date, maturity, tenor)
 
     def annuity(self, dc):
         """
@@ -343,24 +438,24 @@ class InterestRateSwaption:
 
     Attributes:
     -----------
-    start_date: datetime.date
-        The start date of contract
-    exercise_date: datetime.date
-        The exercise date of the swaptions.
-    volatility: float
-            The swap rate volatility.
     nominal: float
         Nominal of the swap.
+    start_date: datetime.date
+        The start date of contract.
+    exercise_date: datetime.date
+        The exercise date of the swaptions.
+    maturity: str
+        Maturity of the swap.
+    volatility: float
+        The swap rate volatility.
     fixed_rate: float
         Rate of the fixed leg of the swap.
-    tenor_months: int
-        Tenor of the contract in months.
-    maturity_years: int
-        Maturity of the swap in years.
+    tenor: str
+        Tenor of the contract.
     """
-    def __init__(self, start_date, exercise_date, volatility,
-                 nominal, fixed_rate, tenor_months, maturity_years):
-        self.irs = InterestRateSwap(nominal, start_date, fixed_rate, tenor_months, maturity_years)
+    def __init__(self, nominal, start_date, exercise_date, maturity,
+                 volatility, fixed_rate, tenor):
+        self.irs = InterestRateSwap(nominal, start_date, maturity, fixed_rate, tenor)
         self.exercise_date = exercise_date
         self.sigma = volatility
         
@@ -393,7 +488,7 @@ class InterestRateSwaption:
         Params:
         -------
         obs_date: datetime.date
-            The observation date
+            Observation date
         dc: DiscountCurve
             The curve to discount the npv.
         fc: ForwardRateCurve
@@ -418,20 +513,18 @@ class CreditCurve:
 
     Attributes:
     -----------
+    obs_date: datetime.date
+        Observation date.
     pillar_date: list of datetime.date
         List of dates that forms the pillars of the curve.
     ndps: list of floats
         List of non-default probabilities.
     """    
-    def __init__(self, pillar_dates, ndps):
+    def __init__(self, obs_date, pillar_dates, ndps):
+        self.obs_date = obs_date
         self.pillar_dates = pillar_dates
-        
-        self.pillar_days = [
-            (pd - pillar_dates[0]).days
-            for pd in pillar_dates
-        ]
-        
-        self.ndps = ndps
+        self.pillar_days = [obs_date] + [(pd - pillar_dates[0]).days for pd in pillar_dates]
+        self.ndps = [1] + ndps
         
     def ndp(self, d):
         """
@@ -442,10 +535,11 @@ class CreditCurve:
         d: datatime.date
             The date of the interpolation.
         """
-        value_days = (value_date - self.pillar_dates[0]).days
-        return numpy.interp(value_days,
-                            self.pillar_days,
-                            self.ndps)
+        d_days = (d - self.obs_date).days
+        if d_days < self.obs_date or d_days > self.pillar_days[-1]:
+            print ("Cannot extrapolate survival probability.")
+            return None
+        return numpy.interp(d_days, self.pillar_days, self.ndps)
     
     def hazard(self, d):
         """
@@ -456,8 +550,8 @@ class CreditCurve:
         d: datetime.date
             The date at which the hazard rate is computed.
         """
-        ndp_1 = self.ndp(value_date)
-        ndp_2 = self.ndp(value_date + relativedelta(days=1))
+        ndp_1 = self.ndp(d)
+        ndp_2 = self.ndp(d + relativedelta(days=1))
         delta_t = 1.0 / 365.0
         h = -1.0 / ndp_1 * (ndp_2 - ndp_1) / delta_t
         return h
@@ -468,24 +562,23 @@ class CreditDefaultSwap:
 
     Attributes:
     -----------
-    notional: float
-        Notional of the swap.
+    nominal: float
+        Nominal of the swap.
     start_date: datetime.date
         Starting date of the contract.
+    maturity: std
+        Maturity of the swap.
     fixed_spread: float
         The spread associated to the premium leg.
-    maturity_years: int
-        Maturity of the swap in years.
-    tenor: int
-        Tenor of the premium leg in months, default is 3.
+    tenor: str
+        Tenor of the premium leg, default is 3m.
     recovery: float
         Recovery parameter in case of default, default value is 40%
     """    
-    def __init__(self, notional, start_date, fixed_spread,
-                 maturity_years, tenor=3, recovery=0.4):
+    def __init__(self, nominal, start_date, maturity, fixed_spread,
+                 tenor="3m", recovery=0.4):
         self.notional = notional
-        self.payment_dates = generate_dates(start_date,
-                                            maturity_years*12, tenor)
+        self.payment_dates = generate_dates(start_date, maturity, tenor)
         self.fixed_spread = fixed_spread
         self.recovery = recovery
 
@@ -554,7 +647,15 @@ class CreditDefaultSwap:
         den = self.npv_premium_leg(dc, cc)/self.fixed_spread
         return num/den
 
-class ExpDefault(rv_continuous): 
+class ExpDefault(rv_continuous):
+    """
+    ExpDefault - class that describes lambda * exp(-lambda*x) distribution, inherits from rv_continuous.
+    
+    Params:
+    -------
+    lambda: float
+        Lambda parameter of the distribution.
+    """
     def __init__(self, l):
         super().__init__()
         self.ulim = 100
@@ -562,17 +663,47 @@ class ExpDefault(rv_continuous):
         self.ppf_func = self.prepare_ppf()
 
     def _cdf(self, x):
+        """
+        _cdf - reimplement the same method from parent class.
+
+        Params:
+        -------
+        x: float or numpy.array
+            Values where to compute the distribution CDF.
+        """
         x[x < 0] = 0
         return (1 - np.exp(-self.l*x))
 
     def _pdf(self, x):
+        """
+        _pdf - reimplement the same method from parent class.
+
+        Params:
+        -------
+        x: float or numpy.array
+            Values where to compute the distribution PDF.
+        """
         x[x < 0] = 0
         return self.l*np.exp(-self.l*x)
 
     def _ppf(self, x):
+        """
+        _ppf - reimplement the same method from parent class.
+
+        Params:
+        -------
+        x: float or numpy.array
+            Values where to compute the distribution PPF.
+        """
         return self.ppf_func(x)
   
     def prepare_ppf(self):
+        """
+        prepare_ppf - utility function to ease ppf calculation.
+
+        Params:
+        -------
+        """
         xs = np.linspace(0, self.ulim, 10000001)
         cdf = self.cdf(xs)/self.cdf(xs[-1])
         func_ppf = interp1d(cdf, xs, fill_value='extrapolate')
@@ -586,26 +717,27 @@ class BasketDefaultSwaps:
     -----------
     nominal: float
         Notional of the swap.
+    N: int
+        umber of reference entities underlying the BDS.
+    hazard_rate: float
+        Hazard rate for default probabilities.
+    rho: float
+        Correlation factor for the defaults.    
     start_date: datetime.date
         Starting date of the contract.
+    maturity: str
+        Maturity of the swap.
     spread: float
         The spread associated to the premium leg.
-    maturity_years: int
-        Maturity of the swap in years.
-    hazard_rate: float
-        Hazard rate for default probabilities
-    rho: float
-        Correlation factor for the defaults
-    N: int
-        Reference entities underlying the BDS.
-    tenor: int
-        Tenor of the premium leg in months, default is 3.
+    tenor: str
+        Tenor of the premium leg, default is 3m.
     recovery: float
         Recovery parameter in case of default, default value is 40%
     """    
-    def __init__(self, nominal, start_date, spread, maturity_years, hazard_rate, rho, N,
-                 tenor=3, recovery=0.4):
-        self.cds = CreditDefaultSwap(nominal, start_date, spread, maturity_years, tenor, recovery)
+    def __init__(self, nominal, N, hazard_rate, rho, start_date, maturity,
+                 spread, tenor=3, recovery=0.4):
+        self.cds = CreditDefaultSwap(nominal, start_date, maturity,
+                                     spread, tenor, recovery)
         self.Q = ExpDefault(l=hazard_rate)
         self.N = N
         self.rho = rho
@@ -671,27 +803,27 @@ class BasketDefaultSwapsOneFactor:
     -----------
     nominal: float
         Notional of the swap.
+    N: int
+        Reference entities underlying the BDS.
+    rho: float
+        Correlation factor for the defaults
     start_date: datetime.date
         Starting date of the contract.
     spread: float
         The spread associated to the premium leg.
-    maturity_years: int
-        Maturity of the swap in years.
-    rho: float
-        Correlation factor for the defaults
-    N: int
-        Reference entities underlying the BDS.
+    maturity: str
+        Maturity of the swap.
     tenor: int
         Tenor of the premium leg in months, default is 3.
     recovery: float
         Recovery parameter in case of default, default value is 40%
-    """    
-    def __init__(self, nominal, start_date, spread,
-                 maturity_years, rho, N, tenor=3, recovery=0.4):
+    """
+    def __init__(self, nominal, N, rho, start_date, maturity,
+                 spread, tenor=3, recovery=0.4):
         self.N = N
         self.rho = rho
-        self.cds = CreditDefaultSwap(nominal, start_date, spread, 
-                                     maturity_years, tenor, recovery)
+        self.cds = CreditDefaultSwap(nominal, start_date, maturity,
+                                     spread, tenor, recovery)
 
     def one_factor_model(self, M, f, Q_dates, Q, dc, ndefaults):
         """
