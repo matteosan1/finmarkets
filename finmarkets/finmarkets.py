@@ -1,6 +1,6 @@
 import numpy as np
 
-from scipy.stats import norm, rv_continuous, binom
+from scipy.stats import norm, rv_continuous, binom, multivariate_normal
 from scipy.integrate import quad
 from scipy.interpolate import interp1d
 
@@ -8,8 +8,17 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 
 def maturity_from_str(maturity_str):
+    """
+    maturity_from_str - utility to convert time intervals to integers in months. The interval
+                        has the following format "XXy" with XX the value and y the units (y, Y, m, M, d, D).
+
+    Params:
+    -------
+    maturity_str: str
+        The string to be converted.
+    """
     tag = maturity_str[-1].lower()
-    maturity = int(maturity[:-1])
+    maturity = int(maturity_str[:-1])
     if tag == "y":
         return maturity*12
     elif tag == "m":
@@ -99,7 +108,7 @@ def generate_dates(start_date, maturity, tenor="1y"):
     tenor: str
         Tenor of the list of dates, by default it is 12 months.
     """
-    maturity_monts = maturity_from_str(maturity)
+    maturity_months = maturity_from_str(maturity)
     tenor_months = maturity_from_str(tenor)
     dates = []
     for d in range(0, maturity_months, tenor_months):
@@ -123,7 +132,7 @@ class DiscountCurve:
     def __init__(self, obs_date, pillar_dates, discount_factors):
         self.obs_date = obs_date
         self.pillar_dates = [obs_date] + pillar_dates
-        self.discount_factors = [1.] + discount_factors
+        self.discount_factors = np.insert(np.array(discount_factors), 0, 1)
         self.log_discount_factors = [np.log(discount_factor) for discount_factor in self.discount_factors]
         self.pillar_days = [(pillar_date - obs_date).days for pillar_date in self.pillar_dates]
         
@@ -136,10 +145,10 @@ class DiscountCurve:
         d: datetime.date
             The actual date at which we would like the interpolated discount factor.
         """
-        d_days = (d - self.obs_date).days
-        if d_days < self.obs_date or d_days > self.pillar_days[-1]:
-            print ("Cannot extrapolate discount factors.")
+        if d < self.obs_date or d > self.pillar_dates[-1]:
+            print ("Cannot extrapolate discount factors (date: {}).".format(d))
             return None
+        d_days = (d - self.obs_date).days
         interpolated_log_discount_factor = np.interp(d_days, self.pillar_days, self.log_discount_factors)
         return np.exp(interpolated_log_discount_factor)
     
@@ -201,8 +210,8 @@ class ForwardRateCurve:
             The date of the interpolated rate.
         """
         d_frac = (d - self.obs_date).days/365
-        if d_frac < self.obs_date or d_frac > self.pillar_days[-1]:
-            print ("Cannot extrapolate rates.")
+        if d < self.obs_date or d_frac > self.pillar_days[-1]:
+            print ("Cannot extrapolate rates (date: {}).".format(d))
             return None, None
         else:
             return d_frac, np.interp(d_frac, self.pillar_days, self.rates)
@@ -522,9 +531,9 @@ class CreditCurve:
     """    
     def __init__(self, obs_date, pillar_dates, ndps):
         self.obs_date = obs_date
-        self.pillar_dates = pillar_dates
-        self.pillar_days = [obs_date] + [(pd - pillar_dates[0]).days for pd in pillar_dates]
-        self.ndps = [1] + ndps
+        self.pillar_dates = [obs_date] + pillar_dates
+        self.pillar_days = [(pd - obs_date).days for pd in self.pillar_dates]
+        self.ndps = np.insert(np.array(ndps), 0, 1)
         
     def ndp(self, d):
         """
@@ -536,10 +545,10 @@ class CreditCurve:
             The date of the interpolation.
         """
         d_days = (d - self.obs_date).days
-        if d_days < self.obs_date or d_days > self.pillar_days[-1]:
-            print ("Cannot extrapolate survival probability.")
+        if d < self.obs_date or d_days > self.pillar_days[-1]:
+            print ("Cannot extrapolate survival probabilities (date: {}).".format(d))
             return None
-        return numpy.interp(d_days, self.pillar_days, self.ndps)
+        return np.interp(d_days, self.pillar_days, self.ndps)
     
     def hazard(self, d):
         """
@@ -577,7 +586,7 @@ class CreditDefaultSwap:
     """    
     def __init__(self, nominal, start_date, maturity, fixed_spread,
                  tenor="3m", recovery=0.4):
-        self.notional = notional
+        self.nominal = nominal
         self.payment_dates = generate_dates(start_date, maturity, tenor)
         self.fixed_spread = fixed_spread
         self.recovery = recovery
@@ -597,7 +606,7 @@ class CreditDefaultSwap:
         for i in range(1, len(self.payment_dates)):
             npv += (dc.df(self.payment_dates[i]) *
                     cc.ndp(self.payment_dates[i]))
-        return self.fixed_spread * npv * self.notional
+        return self.fixed_spread * npv * self.nominal
 
     def npv_default_leg(self, dc, cc):
         """
@@ -617,7 +626,7 @@ class CreditDefaultSwap:
                    cc.ndp(d) -
                    cc.ndp(d + relativedelta(days=1)))
             d += relativedelta(days=1)
-        return npv * self.notional * (1 - self.recovery)
+        return npv * self.nominal * (1 - self.recovery)
 
     def npv(self, dc, cc):
         """
@@ -743,12 +752,14 @@ class BasketDefaultSwaps:
         self.rho = rho
         self.cc = None
 
-    def credit_curve(self, pillars, n_defaults):
+    def credit_curve(self, obs_date, pillars, n_defaults):
         """
         Compute the credit curve needed for the BDS valuation.
 
         Params:
         -------
+        obs_date: datetime.date
+            Observation date.
         pillars: list(datetime.date) 
             Pillars to determine non-default probabilities.
         n_defaults: int
@@ -758,7 +769,7 @@ class BasketDefaultSwaps:
         cov = np.ones(shape=(self.N, self.N))*self.rho
         np.fill_diagonal(cov, 1)
         mean = np.zeros(self.N)
-        mv = ss.multivariate_normal(mean=mean, cov=cov)
+        mv = multivariate_normal(mean=mean, cov=cov)
         x = mv.rvs(size=simulations)
         x_unif = norm.cdf(x)
         default_times = self.Q.ppf(x_unif)
@@ -768,7 +779,7 @@ class BasketDefaultSwaps:
         for t in Ts:
             b = np.count_nonzero(default_times<=t, axis=1)
             ndps.append(1 - len(b[b>=n_defaults])/simulations)
-        self.cc = CreditCurve(pillars, ndps)
+        self.cc = CreditCurve(obs_date, pillars, ndps)
 
     def npv(self, dc):
         """
@@ -825,7 +836,8 @@ class BasketDefaultSwapsOneFactor:
         self.cds = CreditDefaultSwap(nominal, start_date, maturity,
                                      spread, tenor, recovery)
 
-    def one_factor_model(self, M, f, Q_dates, Q, dc, ndefaults):
+    def one_factor_model(self, M, f, obs_date,
+                         Q_dates, Q, dc, ndefaults):
         """
         Estimate a quantity value according to the One Factor Model
 
@@ -835,6 +847,8 @@ class BasketDefaultSwapsOneFactor:
             Market value.
         f: user defined function
             Function returning the quantity to estimate.
+        obs_date: datetime.date
+            Observation date.
         Q_dates: list(datetime.date)
             List of dates with known default probability.
         Q: list(float)
@@ -847,15 +861,17 @@ class BasketDefaultSwapsOneFactor:
         P = norm.cdf((norm.ppf(Q) - np.sqrt(self.rho)*M)/np.sqrt(1-self.rho))
         b = binom(self.N, P)
         S = 1 - (1 - b.cdf(ndefaults-1))
-        cc = CreditCurve(Q_dates, S)
+        cc = CreditCurve(obs_date, Q_dates, S)
         return f(dc, cc)*norm.pdf(M)
             
-    def breakeven(self, Q_dates, Q, dc, ndefaults):
+    def breakeven(self, obs_date, Q_dates, Q, dc, ndefaults):
         """
         Compute the breakeven of the BDS.
 
         Params:
         -------
+        obs_date: datetime.date
+            Observation date.
         Q_dates: list(datetime.date)
             List of dates with known default probability.
         Q: list(float)
@@ -869,12 +885,14 @@ class BasketDefaultSwapsOneFactor:
                  args=(self.cds.breakevenRate, Q_dates, Q, dc, ndefaults))
         return s[0]
     
-    def npv(self, Q_dates, Q, dc, ndefaults):
+    def npv(self, obs_date, Q_dates, Q, dc, ndefaults):
         """
         Compute the npv of the BDS.
 
         Params:
         -------
+        obs_date: datetime.date
+            Observation date.
         Q_dates: list(datetime.date)
             List of dates with known default probability.
         Q: list(float)
