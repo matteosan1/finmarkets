@@ -399,14 +399,17 @@ class InterestRateSwap:
         maturity of the swap.
     fixed_rate: float
         rate of the fixed leg of the swap
-    tenor: str
-        tenor of the contract
+    tenor_float: str
+        tenor of the float leg
+    tenor_fix: str
+        tenor of the fixed leg. default value is 1 year
     """    
-    def __init__(self, nominal, start_date, maturity, fixed_rate, tenor):
+    def __init__(self, nominal, start_date, maturity,
+                 fixed_rate, tenor_float, tenor_fix="12m"):
         self.nominal = nominal
         self.fixed_rate = fixed_rate
-        self.fixed_leg_dates = generate_dates(start_date, maturity)
-        self.floating_leg_dates = generate_dates(start_date, maturity, tenor)
+        self.fixed_leg_dates = generate_dates(start_date, maturity, tenor_fix)
+        self.floating_leg_dates = generate_dates(start_date, maturity, tenor_float)
 
     def annuity(self, dc):
         """
@@ -531,6 +534,7 @@ class InterestRateSwaption:
         one_sigma = np.std(payoffs)/np.sqrt(n_scenarios)
         return payoff, one_sigma
 
+import pickle
 class CreditCurve:
     """
     A class to represents credit curves
@@ -579,6 +583,14 @@ class CreditCurve:
         delta_t = 1.0 / 365.0
         h = -1.0 / ndp_1 * (ndp_2 - ndp_1) / delta_t
         return h
+
+def saveObj(filename, obj):
+    with open(filename, 'wb') as f:
+        pickle.dump(obj, f, 2)
+
+def loadObj(filename):
+    with open(filename, "rb") as f:
+        return pickle.load(f)
     
 class CreditDefaultSwap:
     """

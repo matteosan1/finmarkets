@@ -5,5 +5,6 @@ from tests.option_test import *
 from tests.irs_test import *
 from tests.credit_test import *
 from tests.var_test import *
-
+from tests.stoca_test import *
+from tests.short_rate_test import *
 
