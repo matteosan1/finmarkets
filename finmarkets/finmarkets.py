@@ -1,4 +1,4 @@
-import numpy as np
+import numpy as np, pickle
 
 from scipy.stats import norm, rv_continuous, binom, multivariate_normal
 from scipy.integrate import quad
@@ -6,6 +6,32 @@ from scipy.interpolate import interp1d
 
 from datetime import date
 from dateutil.relativedelta import relativedelta
+
+def saveObj(filename, obj):
+    """
+    Utility function to pickle any "finmarkets" object
+
+    Params:
+    -------
+    filename: str
+        filename of the pickled object
+    obj: finmarkets object
+        the object to pickle
+    """
+    with open(filename, 'wb') as f:
+        pickle.dump(obj, f, 2)
+
+def loadObj(filename):
+    """
+    Utility function to unpickle any "finmarkets" object
+
+    Params:
+    -------
+    filename: str
+        filename of the object to unpickle
+    """    
+    with open(filename, "rb") as f:
+        return pickle.load(f)
 
 def maturity_from_str(maturity):
     """
@@ -18,13 +44,13 @@ def maturity_from_str(maturity):
         the string to be converted
     """
     tag = maturity[-1].lower()
-    maturity = int(maturity[:-1])
+    maturity = float(maturity[:-1])
     if tag == "y":
         return maturity*12
     elif tag == "m":
         return maturity
     elif tag == "d":
-        return maturity//30
+        return maturity/30
     else:
         raise ValueError("Unrecognized label {}".format(tag))
 
@@ -107,8 +133,8 @@ def generate_dates(start_date, maturity, tenor="1y"):
     tenor: str
         tenor of the list of dates, by default is 12 months
     """
-    maturity_months = maturity_from_str(maturity)
-    tenor_months = maturity_from_str(tenor)
+    maturity_months = int(round(maturity_from_str(maturity), 0))
+    tenor_months = int(round(maturity_from_str(tenor), 0))
     dates = []
     for d in range(0, maturity_months, tenor_months):
         dates.append(start_date + relativedelta(months=d))
@@ -1109,7 +1135,7 @@ def generate_returns(df, N=10000):
     data = df.reset_index()
     return data.loc[np.random.choice(range(len(data)), N)]
 
-def var_discrete(df, alpha=0.95, N=10000, return_col="P"):
+def var_discrete(df, alpha=0.95, return_col="P", N=10000):
     """
     Computes VaR at a specified confidence level, given a discrete loss distribution as a DataFrame
     
@@ -1119,6 +1145,8 @@ def var_discrete(df, alpha=0.95, N=10000, return_col="P"):
         dataset containing the loss descrete distribution
     alpha: float
         confidence level for VaR calculation
+    return_col: str
+        name of the column in the dataframe
     N: int
         number of samples to generate
     """
@@ -1127,7 +1155,7 @@ def var_discrete(df, alpha=0.95, N=10000, return_col="P"):
     print (new_df.head())
     return -np.percentile(new_df[return_col], alpha*100)
     
-def es_discrete(df, alpha=0.95, N=10000, return_col="P"):
+def es_discrete(df, alpha=0.95, return_col="P", N=10000):
     """
     Computes Expected Shortfall at a specified confidence level, given a discrete loss distribution
     
@@ -1137,6 +1165,8 @@ def es_discrete(df, alpha=0.95, N=10000, return_col="P"):
         dataset containing the loss descrete distribution
     alpha: float
         confidence level for ES calculation
+    return_col: str
+        name of the column in the dataframe
     N: int
         number of samples to generate
     """
