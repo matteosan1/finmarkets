@@ -1,4 +1,4 @@
-import numpy as np
+import numpy as np, pickle
 
 from scipy.stats import norm, rv_continuous, binom, multivariate_normal
 from scipy.integrate import quad
@@ -6,6 +6,16 @@ from scipy.interpolate import interp1d
 
 from datetime import date
 from dateutil.relativedelta import relativedelta
+
+
+def saveObj(filename, obj):
+    with open(filename, 'wb') as f:
+        pickle.dump(obj, f, 2)
+
+def loadObj(filename):
+    with open(filename, "rb") as f:
+        return pickle.load(f)
+    
 
 def maturity_from_str(maturity):
     """
@@ -534,7 +544,6 @@ class InterestRateSwaption:
         one_sigma = np.std(payoffs)/np.sqrt(n_scenarios)
         return payoff, one_sigma
 
-import pickle
 class CreditCurve:
     """
     A class to represents credit curves
@@ -584,14 +593,6 @@ class CreditCurve:
         h = -1.0 / ndp_1 * (ndp_2 - ndp_1) / delta_t
         return h
 
-def saveObj(filename, obj):
-    with open(filename, 'wb') as f:
-        pickle.dump(obj, f, 2)
-
-def loadObj(filename):
-    with open(filename, "rb") as f:
-        return pickle.load(f)
-    
 class CreditDefaultSwap:
     """
     A class to represent Credit Default Swaps
