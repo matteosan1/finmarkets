@@ -33,7 +33,7 @@ def loadObj(filename):
     with open(filename, "rb") as f:
         return pickle.load(f)
 
-def maturity_from_str(maturity):
+def maturity_from_str(maturity, unit="m"):
     """
     Utility to convert time intervals to integers in months. 
     The interval has the following format "XXy" with XX the value and y the units (y, Y, m, M, d, D).
@@ -42,17 +42,27 @@ def maturity_from_str(maturity):
     -------
     maturity: str
         the string to be converted
+    unit: str
+        time unit of the output, default value is month
     """
     tag = maturity[-1].lower()
     maturity = float(maturity[:-1])
     if tag == "y":
-        return maturity*12
-    elif tag == "m":
-        return maturity
+        maturity *= 12
     elif tag == "d":
-        return maturity/30
-    else:
+        maturity /= 30
+    elif tag != "m":
         raise ValueError("Unrecognized label {}".format(tag))
+
+    unit = unit.lower()
+    if unit == "y":
+        maturity /= 12
+    elif unit == "d":
+        maturity *= 30
+    elif tag != "m":
+        raise ValueError("Unrecognized output unit {}".format(tag))
+    
+    return maturity
 
 class Bond:
     """
@@ -343,10 +353,13 @@ def call(St, K, r, sigma, ttm):
         risk free interest rate
     sigma: float
         underlying volatility
-    ttm: str
+    ttm: str or list(str)
         time to maturity
     """
-    ttm = maturity_from_str(ttm)/12
+    if type(ttm) == 'list':
+        ttm = np.array([maturity_from_str(t, "y") for t in ttm])
+    else:
+        ttm = maturity_from_str(ttm, "y")
     return (St*norm.cdf(d_plus(St, K, r, sigma, ttm)) -
             K*np.exp(-r*(ttm))*norm.cdf(d_minus(St, K, r, sigma, ttm)))
 
@@ -367,7 +380,10 @@ def put(St, K, r, sigma, ttm):
     ttm: str
         time to maturity
     """
-    ttm = maturity_from_str(ttm)/12
+    if type(ttm) == 'list':
+        ttm = np.array([maturity_from_str(t, "y") for t in ttm])
+    else:
+        ttm = maturity_from_str(ttm, "y")
     return (K*np.exp(-r*(ttm))*norm.cdf(-d_minus(St, K, r, sigma, ttm)) -
             St*norm.cdf(-d_plus(St, K, r, sigma, ttm)))
     
