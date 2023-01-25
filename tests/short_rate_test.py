@@ -1,29 +1,54 @@
+import unittest
 import numpy as np
 
 from short_rate import VasicekModel, CIRModel
 
+class Test_ShortRate(unittest.TestCase):
+    def test_vasicek(self):
+        r0 = 0.03
+        v = VasicekModel(0.3, 0.10, 0.03)
+        n = 1000
+        T = 1
+        m = 100
+        dt = T/m
+        res = []
+
+        for i in range(n):
+            v.setSeed(i)
+            r = v.r_generator(r0, T, m)
+            I = np.sum(r[1:])*dt
+            res.append(np.exp(-I))
+
+        self.assertAlmostEqual(v.ZCB(T, r0), 0.9613, places=4)
+        self.assertAlmostEqual(np.mean(res), 0.9615, places=4)
+        self.assertAlmostEqual(np.std(res)/np.sqrt(n), 0.0005, places=4)
+        #print ("Exact Vasicek Price: {:.4f}".format(v.ZCB(T, r0)))
+        #print ("MC Price: {:.4f}".format(np.mean(res)))
+        #print ("MC Std Error: {:.4f}".format(np.std(res)/np.sqrt(n)))
+
+    def test_cir(self):
+        c = CIRModel(0.3, 0.07, 0.03)
+        r = c.r_generator(0.01875, 10)
+        b = np.array([0.01875    ,0.02239759 ,0.0229571  ,0.02360919 ,0.02343687 ,0.02609064,
+                      0.02388111 ,0.02782265 ,0.02788343 ,0.02965233 ,0.03045538 ,0.03406238,
+                      0.03153343 ,0.03214427 ,0.03262671 ,0.03569073 ,0.03474873 ,0.03550133,
+                      0.03496713 ,0.036093   ,0.03816064 ,0.03707612 ,0.04015491 ,0.04276422,
+                      0.0445671  ,0.04713428 ,0.04641203 ,0.0468685  ,0.04564055 ,0.04582839,
+                      0.04763064 ,0.04686967 ,0.04674871 ,0.04603673 ,0.0450352  ,0.04443276,
+                      0.04517445 ,0.04366632 ,0.04492104 ,0.04901077 ,0.05119891 ,0.05135114,
+                      0.05000239 ,0.04901732 ,0.05320158 ,0.05381671 ,0.05290031 ,0.05382988,
+                      0.05893778 ,0.05954639 ,0.06128882 ,0.06225514 ,0.06165369 ,0.05921276,
+                      0.05872993 ,0.05858777 ,0.06027718 ,0.06252299 ,0.06495601 ,0.06579784,
+                      0.06807787 ,0.06626819 ,0.06943985 ,0.07073893 ,0.06996462 ,0.07119154,
+                      0.0709645  ,0.07379544 ,0.07759834 ,0.0831462  ,0.07893165 ,0.0748147 ,
+                      0.07336124 ,0.07367162 ,0.07581758 ,0.07646755 ,0.07096854 ,0.07016562,
+                      0.0722413  ,0.07276077 ,0.07462793 ,0.0739129  ,0.07327773 ,0.0736585 ,
+                      0.07460452 ,0.07498022 ,0.07513997 ,0.07324171 ,0.07411383 ,0.07430504,
+                      0.07709675 ,0.08004197 ,0.08023767 ,0.07892205 ,0.07695208 ,0.07785801,
+                      0.077827   ,0.07668215 ,0.07659622 ,0.07477047])
+        self.assertIsNone(np.testing.assert_array_almost_equal(r, b, decimal=4))
+        #print (r)
+
 print ("\nTest Short Rates")
-print ("------------------")
-
-r0 = 0.03
-v = VasicekModel(0.3, 0.10, 0.03)
-n = 1000
-T = 1
-m = 100
-dt = T/m
-res = []
-
-for i in range(n):
-    v.setSeed(i)
-    r = v.r_generator(r0, T, m)
-    I = np.sum(r[1:])*dt
-    res.append(np.exp(-I))
-    
-print ("Exact Vasicek Price: {:.4f}".format(v.ZCB(T, r0)))
-print ("MC Price: {:.4f}".format(np.mean(res)))
-print ("MC Std Error: {:.4f}".format(np.std(res)/np.sqrt(n)))
-
-
-c = CIRModel(0.3, 0.07, 0.03)
-r = c.r_generator(0.01875, 10)
-print (r)
+if __name__ == '__main__':
+    unittest.main()

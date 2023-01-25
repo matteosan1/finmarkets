@@ -59,8 +59,8 @@ def maturity_from_str(maturity, unit="m"):
         maturity /= 12
     elif unit == "d":
         maturity *= 30
-    elif tag != "m":
-        raise ValueError("Unrecognized output unit {}".format(tag))
+    elif unit != "m":
+        raise ValueError("Unrecognized output unit {}".format(unit))
     
     return maturity
 

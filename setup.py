@@ -33,7 +33,8 @@ setup(
     install_requires=['numpy',
                       'scipy',
                       'tensorflow',
-                      'pickle],
+                      'pickle',
+                      'unittest'],
     #dependencies = ["peppercorn"]
 
     classifiers=[
