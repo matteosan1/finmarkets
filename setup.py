@@ -32,9 +32,7 @@ setup(
     #py_modules=['finmarkets'],
     install_requires=['numpy',
                       'scipy',
-                      'tensorflow',
-                      'pickle',
-                      'unittest'],
+                      'tensorflow'],
     #dependencies = ["peppercorn"]
 
     classifiers=[
