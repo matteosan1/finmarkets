@@ -356,7 +356,7 @@ def call(St, K, r, sigma, ttm):
     ttm: str or list(str)
         time to maturity
     """
-    if type(ttm) == 'list':
+    if type(ttm) == list:
         ttm = np.array([maturity_from_str(t, "y") for t in ttm])
     else:
         ttm = maturity_from_str(ttm, "y")
@@ -380,7 +380,7 @@ def put(St, K, r, sigma, ttm):
     ttm: str
         time to maturity
     """
-    if type(ttm) == 'list':
+    if type(ttm) == list:
         ttm = np.array([maturity_from_str(t, "y") for t in ttm])
     else:
         ttm = maturity_from_str(ttm, "y")
