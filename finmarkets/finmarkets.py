@@ -64,72 +64,6 @@ def maturity_from_str(maturity, unit="m"):
     
     return maturity
 
-class Bond:
-    """
-    A class to represent bonds
-
-    Params:
-    -------
-    face_value: float
-        face value of the bond
-    start_date: datetime.date
-        start date of the contract
-    maturity: str
-        maturity of the bond.
-    coupon: float or list(float)
-        coupons of the bond
-    tenor: str
-        tenor of the coupon
-    """
-    def __init__(self, face_value, start_date, maturity, coupon, tenor):
-        self.FV = face_value
-        self.C = coupon
-        self.tau = maturity_from_str(tenor)/12
-        self.payment_dates = generate_dates(start_date, maturity, tenor)
-
-    def npv(self, dc):
-        """
-        Computes the bond NPV
-        
-        Params:
-        -------
-        dc: DiscountCurve
-          discount curve to be used in the pricing
-        """
-        val = 0
-        for i in range(1, len(self.payment_dates)):
-            val += self.C*self.tau*dc.df(self.payment_dates[i])
-        val += dc.df(self.payment_dates[-1])
-        return self.FV*val
-
-    def loss(self, dc, def_date):
-        """
-        Computes the bond loss in case of default
-        
-        Params:
-        -------
-        dc: DiscountCurve
-          discount curve to be used in the pricing
-        def_date: datetime.date
-          default date of the bond emitter
-        """
-        val = 0
-        for i in range(1, len(self.payment_dates)):
-            if self.payment_dates[i-1] <= def_date < self.payment_dates[i]:
-                rateo = (self.payment_dates[i] - def_date).days/(self.payment_dates[i] - self.payment_dates[i-1]).days
-                val += self.C*rateo*self.tau*dc.df(def_date)
-            elif self.payment_dates[i] > def_date:  
-                val += self.C*self.tau*dc.df(self.payment_dates[i])
-        val += dc.df(self.payment_dates[-1])
-        return self.FV*val
-                
-#def bond_value(N, C, r, maturity):
-#    value = 0
-#    for t in range(1, maturity+1):
-#        value += N*C*1/(1+r)**t
-#    value += N*1/(1+r)**t
-#    return value
-
 def generate_dates(start_date, maturity, tenor="1y"):
     """
     Computes a set of dates given starting date and length in months.
@@ -150,6 +84,116 @@ def generate_dates(start_date, maturity, tenor="1y"):
         dates.append(start_date + relativedelta(months=d))
     dates.append(start_date + relativedelta(months=maturity_months))
     return dates
+
+class Bond:
+    """
+    A class to represent bonds
+
+    Params:
+    -------
+    start_date: datetime.date
+        start date of the contract
+    maturity: str
+        maturity of the bond
+    K: float or list(float)
+        coupons of the bond
+    tenor: str
+        tenor of the coupon
+    face_value: float
+        face value of the bond, default value 100
+    """
+    def __init__(self, start_date, K, maturity, tenor, face_value=100, debug=False):
+        self.start_date = start_date
+        self.maturity = maturity
+        self.payment_dates = generate_dates(start_date, maturity)
+        self.face_value = face_value
+        self.K = K
+        self.tenor = tenor
+        self.debug = debug
+
+    def npv_K(self, K, dc, P):
+        val = 0
+        for i in range(1, len(self.payment_dates)):
+            tau = (self.payment_dates[i] - self.payment_dates[i-1]).days/365
+            val += K*tau*dc.df(self.payment_dates[i])
+        val += dc.df(self.payment_dates[-1])
+        val *= self.face_value
+        return val - P
+
+    def findK(self, dc, P):
+        return brentq(self.npv_K, 0, 1, args=(dc, P))
+
+    def npv(self, dc):
+        """
+        Computes the bond NPV
+        
+        Params:
+        -------
+        dc: DiscountCurve
+            discount curve to be used in the pricing
+        """
+        val = 0
+        for i in range(1, len(self.payment_dates)):
+            tau = (self.payment_dates[i] - self.payment_dates[i-1]).days/365
+            cpn = self.face_value*self.K*tau
+            if i == len(self.payment_dates)-1:
+                cpn += self.face_value
+            if self.debug:
+                print ("CPN Bond: ", i, cpn)
+            val += cpn*dc.df(self.payment_dates[i])
+        return val
+
+    def npv_flat_default(self, dc, pd, R=0.4):
+        """
+        Computes the bond NPV in case of default
+        
+        Params:
+        -------
+        dc: DiscountCurve
+            discount curve to be used in the pricing
+        pd: float
+            flat default probability of the issuer
+        R: float
+            recovery rate, default value 0.4
+        """
+        val = 0
+        for i in range(1, len(self.payment_dates)):
+            tau = (self.payment_dates[i] - self.payment_dates[i-1]).days/365
+            cpn = self.face_value*self.K*tau
+            if i == len(self.payment_dates)-1:
+                cpn += self.face_value
+            val += (pd*(1-pd)**(i-1)*R + (1-pd)**i)*cpn*dc.df(self.payment_dates[i])
+            if self.debug:
+                print ("CPN Bond: ", i, cpn)
+        return val
+
+    def loss(self, dc, def_date):
+        """
+        Computes the bond loss in case of default
+        
+        Params:
+        -------
+        dc: DiscountCurve
+          discount curve to be used in the pricing
+        def_date: datetime.date
+          default date of the bond emitter
+        """
+        val = 0
+        for i in range(1, len(self.payment_dates)):
+            if self.payment_dates[i-1] <= def_date < self.payment_dates[i]:
+                rateo = (self.payment_dates[i] - def_date).days/(self.payment_dates[i] - self.payment_dates[i-1]).days
+                val += self.K*rateo*self.tau*dc.df(def_date)
+            elif self.payment_dates[i] > def_date:  
+                val += self.K*self.tau*dc.df(self.payment_dates[i])
+        val += dc.df(self.payment_dates[-1])
+        return self.FV*val
+    
+#def bond_value(N, C, r, maturity):
+#    value = 0
+#    for t in range(1, maturity+1):
+#        value += N*C*1/(1+r)**t
+#    value += N*1/(1+r)**t
+#    return value
 
 class DiscountCurve:
     """
@@ -426,6 +470,111 @@ def d_minus(St, K, r, sigma, ttm):
         time to maturity in years
     """
     return d_plus(St, K, r, sigma, ttm) - sigma*np.sqrt(ttm)
+
+class ParAssetSwap:
+    """
+    A class to represent interest rate swaps
+
+    Attributes:
+    -----------
+    bond_price: float
+        market price of the underlying bond
+    bond: Bond
+        bond object underlying the asset swap
+    tenor_float: str
+        tenor of the float leg of the swap
+    dc: DiscountCurve
+        discount curve for pricing
+    fc: ForwardRateCurve
+        forward curve to value float leg
+    """    
+    def __init__(self, bond_price, bond, tenor_float, dc, fc, debug=False):
+        self.bond = bond
+        self.nominal = bond.face_value
+        self.fixed_rate = bond.K
+        self.fixed_dates = bond.payment_dates
+        self.float_dates = generate_dates(bond.start_date, bond.maturity, tenor_float)
+        self.dc = dc
+        self.fc = fc
+        self.debug = debug
+        self.bond_price = bond_price
+        self.asspread()
+    
+    def asspread(self):
+        """
+        Computes asset swap spread
+
+        Params:
+        -------
+        """
+        A = self.annuity()
+        s = ((self.bond.npv(self.dc) - self.bond_price)/A)/self.bond.face_value
+        self.spread = s
+
+    def annuity(self):
+        """
+        Computes the annuity
+
+        Params:
+        -------
+        """
+        a = 0
+        for i in range(1, len(self.fixed_dates)):
+            tau = (self.fixed_dates[i] - self.fixed_dates[i-1]).days / 360
+            a += self.dc.df(self.fixed_dates[i])*tau
+        return a
+
+    def swap_rate(self):
+        """ 
+        Computes swap rate
+
+        Params:
+        -------
+        """
+        A = self.annuity()
+        num = 0
+        for j in range(1, len(self.float_dates)):
+            F = self.fc.forward_rate(self.float_dates[j], self.float_dates[j-1])
+            tau = (self.float_dates[j] - self.float_dates[j-1]).days / 360
+            D = self.dc.df(self.float_dates[j])
+            num += (F+self.spread) * tau * D
+        return num/A
+
+    def npv(self):
+        """
+        Computes the swap NPV
+        
+        Params:
+        -------
+        """
+        S = self.swap_rate()
+        A = self.annuity()
+        return (self.bond_price-self.bond.face_value) + self.nominal * (S - self.fixed_rate) * A
+
+    def float_flows(self):
+        val = 0
+        for i in range(1, len(self.float_dates)):
+            F = self.fc.forward_rate(self.float_dates[i], self.float_dates[i-1])
+            tau = (self.float_dates[i] - self.float_dates[i-1]).days / 360
+            cpn = (F+self.spread)*self.nominal*tau
+            if self.debug:
+                print ("Swap Fixed: ", self.float_dates[i], cpn)
+            val += cpn*dc.df(self.floating_leg_dates[i])
+        if self.debug:
+            print ("Total float", val)
+        return val
+
+    def fixed_flows(self):
+        val = 0
+        for i in range(1, len(self.fixed_dates)):
+            tau = (self.fixed_dates[i] - self.fixed_dates[i-1]).days / 360
+            cpn = self.fixed_rate*self.nominal*tau
+            if self.debug:
+                print ("Swap Fixed: ", i, cpn)
+            val += cpn*dc.df(self.fixed_dates[i])
+        if self.debug:
+            print ("Total fixed ", val)
+        return val
     
 class InterestRateSwap:
     """
@@ -727,9 +876,7 @@ class ExpDefault(rv_continuous):
     """
     def __init__(self, l):
         super().__init__()
-        self.ulim = 100
         self.l = l
-        self.ppf_func = self.prepare_ppf()
 
     def _cdf(self, x):
         """
@@ -764,19 +911,47 @@ class ExpDefault(rv_continuous):
         x: float or numpy.array
             values where to compute the distribution PPF
         """
-        return self.ppf_func(x)
-  
-    def prepare_ppf(self):
-        """
-        Utility function to precompute ppf values
+        return -np.log(1-x)/self.l
 
-        Params:
-        -------
-        """
-        xs = np.linspace(0, self.ulim, 10000001)
-        cdf = self.cdf(xs)/self.cdf(xs[-1])
-        func_ppf = interp1d(cdf, xs, fill_value='extrapolate')
-        return func_ppf
+def gaussian_copula_default(N, Q, pillars, cov, n_def, simulations=10000, seed=1):
+    """
+    Utility function to estimate nth-to-default survival probability in 
+    presence of Gaussian correlation using MC simulation.
+    
+    Params:
+    -------
+    N: int
+        number of entities
+    Q: scipy.stats.rv_continuous
+        marginal cumulative default probability
+    pillars: list(datetime.date)
+        list of dates at which survival probality is computed
+    cov: numpy.array
+        covariance matrix for Gaussian correlation
+    n_def: int
+        number of defaults
+    simulations: int
+        number of simulations used to compute the probability, default is 10000
+    seed: int
+        seed for random numbers, default value is 1
+    """
+    np.random.seed(seed)
+
+    if n_def == 0 or N == 0:
+        raise ValueError("Number of defaults or entities cannot be zero !")
+
+    if N < n_def:
+        n_def = N
+        print ("Warning: default number set equal to number of entities.")
+
+    mv = multivariate_normal(mean=np.zeros(N), cov=cov)
+    x = mv.rvs(size = simulations)
+    x_unif = norm.cdf(x)
+
+    default_times = np.sort(Q.ppf(x_unif))
+    Ts = [(p - pillars[0]).days/365 for p in pillars]
+    S_corr = np.array([(1-(default_times[:, n_def-1] <= t).mean()) for t in Ts])
+    return S_corr
     
 class BasketDefaultSwaps:
     """
