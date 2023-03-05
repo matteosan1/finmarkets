@@ -3,6 +3,7 @@ import numpy as np, pickle
 from scipy.stats import norm, rv_continuous, binom, multivariate_normal
 from scipy.integrate import quad
 from scipy.interpolate import interp1d
+from scipy.optimize import brentq
 
 from datetime import date
 from dateutil.relativedelta import relativedelta
@@ -111,18 +112,38 @@ class Bond:
         self.tenor = tenor
         self.debug = debug
 
-    def npv_K(self, K, dc, P):
-        val = 0
+    def yield_to_maturity(self, dc):
+        def obj(y, pv):
+            val = 0
+            for i in range(1, len(self.payment_dates)):
+                tau = (self.payment_dates[i] - self.payment_dates[i-1]).days/365
+                cpn = self.face_value*self.K*tau
+                if i == len(self.payment_dates)-1:
+                    cpn += self.face_value
+            val += cpn/(1+y*tau)**i
+            return val - pv
+        pv = self.npv(dc)
+        return brentq(obj, -0.3, 1, args=(pv,))
+
+    def duration(self, dc):
+        d = 0
         for i in range(1, len(self.payment_dates)):
             tau = (self.payment_dates[i] - self.payment_dates[i-1]).days/365
-            val += K*tau*dc.df(self.payment_dates[i])
-        val += dc.df(self.payment_dates[-1])
-        val *= self.face_value
-        return val - P
+            cpn = self.face_value*self.K*tau
+            if i == len(self.payment_dates)-1:
+                cpn += self.face_value*i*tau
+            d += cpn*dc.df(self.payment_dates[i])
+        return d/self.npv(dc)
 
-    def findK(self, dc, P):
-        return brentq(self.npv_K, 0, 1, args=(dc, P))
+    def mod_duration(self, dc):
+        d = self.duration(dc)
+        y = self.yield_to_maturity(dc)
+        m = 1/((self.payment_dates[1] - self.payment_dates[0]).days/365)
+        return d/(1+y/m)
 
+    def dv01(self, dc):
+        return -self.duration(dc)*self.npv(dc)*0.0001
+        
     def npv(self, dc):
         """
         Computes the bond NPV
@@ -599,8 +620,8 @@ class InterestRateSwap:
                  fixed_rate, tenor_float, tenor_fix="12m"):
         self.nominal = nominal
         self.fixed_rate = fixed_rate
-        self.fixed_leg_dates = generate_dates(start_date, maturity, tenor_fix)
-        self.floating_leg_dates = generate_dates(start_date, maturity, tenor_float)
+        self.fix_dates = generate_dates(start_date, maturity, tenor_fix)
+        self.float_dates = generate_dates(start_date, maturity, tenor_float)
 
     def annuity(self, dc):
         """
@@ -612,8 +633,9 @@ class InterestRateSwap:
             discount curve object used for the annuity
         """
         a = 0
-        for i in range(1, len(self.fixed_leg_dates)):
-            a += dc.df(self.fixed_leg_dates[i])
+        for i in range(1, len(self.fix_dates)):
+            tau = (self.fix_dates[i]-self.fix_dates[i-1]).days/360
+            a += tau*dc.df(self.fix_dates[i])
         return a
 
     def npv(self, dc, fc):
@@ -631,6 +653,9 @@ class InterestRateSwap:
         A = self.annuity(dc)
         return self.nominal * (S - self.fixed_rate) * A
 
+    def bpv(self, dc):
+        return 0.0001*self.annuity(dc)
+
     def swap_rate(self, dc, fc):
         """
         Compute the swap rate of the IRS
@@ -643,10 +668,10 @@ class InterestRateSwap:
             forward curve object used for swap rate calculation
         """
         num = 0
-        for j in range(1, len(self.floating_leg_dates)):
-            F = fc.forward_rate(self.floating_leg_dates[j], self.floating_leg_dates[j-1])
-            tau = (self.floating_leg_dates[j] - self.floating_leg_dates[j-1]).days / 360
-            D = dc.df(self.floating_leg_dates[j])
+        for j in range(1, len(self.float_dates)):
+            F = fc.forward_rate(self.float_dates[j], self.float_dates[j-1])
+            tau = (self.float_dates[j] - self.float_dates[j-1]).days / 360
+            D = dc.df(self.float_dates[j])
             num += F * tau * D
         return num/self.annuity(dc)
 
