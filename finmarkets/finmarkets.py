@@ -675,6 +675,80 @@ class InterestRateSwap:
             num += F * tau * D
         return num/self.annuity(dc)
 
+class Cap:
+    """
+    A class to represent cap/floor
+
+    Attributes:
+    -----------
+    nominal: float
+        nominal of the cap
+    start_date: datetime.date
+        starting date of the contract
+    maturity: str
+        maturity of the cap
+    fixed_rate: float
+        rate of the fixed leg of the swap
+    tenor: str
+        tenor of the cap
+    K: float
+        strike of the cap
+    """    
+    def __init__(self, nominal, start_date, maturity, tenor, K):
+        self.dates = generate_dates(start_date, maturity, tenor)
+        self.K = K
+
+    def caplet_price(self, sigma, fc, dc, start_date, end_date):
+        """
+        Compute a caplet npv
+
+        Params:
+        -------
+        sigma: float
+            caplet volatility
+        fc: ForwardRateCurve
+            forward curve object used for forward rate calculation
+        dc: DiscountCurve
+            discount curve object used for discounting
+        start_date: datetime.date
+            forward start date of the caplet
+        end_date: datetime.date
+            end date of the caplet
+        """
+        tau = (end_date - start_date).days/360
+        D = dc.df(end_date)
+        F = fc.forward_rate(end_date, start_date)
+        Tf = (end_date - dc.pillar_dates[0]).days/360
+        v = sigma*np.sqrt(Tf)
+        d1 = (np.log(F/self.K)+0.5*v**2)/v
+        d2 = (np.log(F/self.K)-0.5*v**2)/v
+        return D*(F*norm.cdf(d1)-self.K*norm.cdf(d2))
+
+    def npv(self, sigma, fc, dc, target_price=0, debug=False):
+        """
+        Compute cap npv
+
+        Params:
+        -------
+        sigma: float
+            cap volatility
+        fc: ForwardRateCurve
+            forward curve object used for forward rate calculation
+        dc: DiscountCurve
+            discount curve object used for discounting
+        target_price: float
+            optional argument for bootstrapping, default value 0
+        """
+        if debug:
+            print (self.dates)
+        val = 0
+        for i in range(1, len(self.dates)):
+            val += self.caplet_price(sigma, fc, dc, 
+                                     self.dates[i-1], self.dates[i])
+        if debug:
+            print (val)
+        return val-target_price
+    
 class InterestRateSwaption:
     """
     A class to represent interest rate swaptions
