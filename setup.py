@@ -23,9 +23,9 @@ setup(
     long_description_content_type = 'text/markdown',
     #requires-python = ">=3.7"
     author = 'Matteo Sani',
-    author_email='matteo.sani@mpscapitalservices.it',
+    author_email='matteo.sani@unisi.it',
     maintainer = 'Matteo Sani',
-    maintainer_email='matteo.sani@mpscapitalservices.it',
+    maintainer_email='matteo.sani@unisi.it',
     license = "LICENSE.txt",
     keywords = ["financial markets", "derivatives"],
     packages=['finmarkets'],

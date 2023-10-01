@@ -9,7 +9,7 @@ from finmarkets import DiscountCurve, OvernightIndexSwap, generate_dates
 
 class Test_Credit(unittest.TestCase):
   def test_ois(self):
-    obs_date = date.today() 
+    obs_date = date(2023, 10, 1)
     start_date = obs_date
     ois = OvernightIndexSwap(1e6, start_date, "3y", 0.025)
     
@@ -18,7 +18,7 @@ class Test_Credit(unittest.TestCase):
     dfs = df['dfs']
     
     curve = DiscountCurve(obs_date, pillars, dfs)
-    self.assertAlmostEqual(ois.npv(curve), -2162.61, places=2)
+    self.assertAlmostEqual(ois.npv(curve), -2164.37, places=2)
     #print ("OIS NPV: {:.2f}".format(ois.npv(curve)))
 
   def test_bootstrap(self):

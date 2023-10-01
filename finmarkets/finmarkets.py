@@ -36,7 +36,7 @@ def loadObj(filename):
 
 def maturity_from_str(maturity, unit="m"):
     """
-    Utility to convert time intervals to integers in months. 
+    Utility to convert time intervals to integers into days, months (default) or years. 
     The interval has the following format "XXy" with XX the value and y the units (y, Y, m, M, d, D).
 
     Params:
@@ -53,7 +53,7 @@ def maturity_from_str(maturity, unit="m"):
     elif tag == "d":
         maturity /= 30
     elif tag != "m":
-        raise ValueError("Unrecognized label {}".format(tag))
+        raise ValueError(f"Unrecognized label {tag}")
 
     unit = unit.lower()
     if unit == "y":
@@ -61,7 +61,7 @@ def maturity_from_str(maturity, unit="m"):
     elif unit == "d":
         maturity *= 30
     elif unit != "m":
-        raise ValueError("Unrecognized output unit {}".format(unit))
+        raise ValueError(f"Unrecognized output unit {unit}")
     
     return maturity
 
@@ -230,11 +230,12 @@ class DiscountCurve:
         actual discount factors
     """
     def __init__(self, obs_date, pillar_dates, discount_factors):
+        discount_factors = np.array(discount_factors)
         if obs_date not in pillar_dates:
-            pillar_dates = [obs] + pillar_dates
-            discount_factors = [1] + discount_factors
+            pillar_dates = [obs_date] + pillar_dates
+            discount_factors = np.insert(discount_factors, 0, 1)
         self.pillars = [p.toordinal() for p in pillar_dates] 
-        self.log_discount_factors = [np.log(discount_factor) for discount_factor in self.discount_factors]
+        self.log_discount_factors = np.log(discount_factors)
         self.interpolator = interp1d(self.pillars, self.log_discount_factors)
         
     def df(self, adate):
@@ -297,7 +298,7 @@ class ForwardRateCurve:
     """
     def __init__(self, obs_date, pillars, rates):
         self.obs_date = obs_date
-        self.pillars = [p.toordinal() for p in pillars]
+        self.pillars = [(p-obs_date).days/365 for p in pillars]
         self.rates = rates
         self.interpolator = interp1d(self.pillars, self.rates)
         
@@ -310,7 +311,7 @@ class ForwardRateCurve:
         adate : datetime.date
             date of the interpolated rate
         """
-        d = adate.toordinal()
+        d = (adate-self.obs_date).days/365
         if d < self.pillars[0] or d > self.pillars[-1]:
             print (f"Cannot extrapolate rates (date: {adate}).")
             return None, None

@@ -1,7 +1,10 @@
 from ._version import __version__
 
 from .finmarkets import *
-from .lrp import *
+try:
+    from .lrp import *
+except ImportError:
+    print ("LRP module needs tensorflow installed.")
 from .stochastic import *
 from .options import *
 

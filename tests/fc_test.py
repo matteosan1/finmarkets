@@ -6,7 +6,7 @@ from finmarkets import ForwardRateCurve, DiscountCurve
 
 class Test_ForwardCurve(unittest.TestCase):
     def test_forward_rate(self):
-        obs_date = date.today()
+        obs_date = date(2022, 10, 1)
         pillar_dates = [obs_date,
                         obs_date + relativedelta(months=12),
                         obs_date + relativedelta(months=30)]
@@ -19,7 +19,7 @@ class Test_ForwardCurve(unittest.TestCase):
         #print ("F({}, {}) = {:.4f}".format(t1, t2, fc.forward_rate(t1, t2)))
 
     def test_discount(self):
-        obs_date = date.today()
+        obs_date = date(2022, 10, 1)
         t1 = obs_date + relativedelta(months=3)
         t2 = obs_date + relativedelta(months=9)
         pillar_dates_estr = [obs_date + relativedelta(months=12),
@@ -37,8 +37,8 @@ class Test_ForwardCurve(unittest.TestCase):
         t1_frac, r1 = euribor_curve.interp_rate(t1)
         C_pre2008 = np.exp(-r1*t1_frac) * euribor_curve.forward_rate(t1, t2)
 
-        self.assertAlmostEqual(C, 0.01513, places=5)
-        self.assertAlmostEqual(C_pre2008, 0.01522, places=5)
+        self.assertAlmostEqual(C, 0.015175, places=5)
+        self.assertAlmostEqual(C_pre2008, 0.01526, places=5)
         #print ("C post 2008: {:.5f}".format(C))
         #print ("C pre 2008: {:.5f}".format(C_pre2008))
 
