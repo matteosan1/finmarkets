@@ -230,27 +230,27 @@ class DiscountCurve:
         actual discount factors
     """
     def __init__(self, obs_date, pillar_dates, discount_factors):
-        self.obs_date = obs_date
-        self.pillar_dates = [obs_date] + pillar_dates
-        self.discount_factors = np.insert(np.array(discount_factors), 0, 1)
+        if obs_date not in pillar_dates:
+            pillar_dates = [obs] + pillar_dates
+            discount_factors = [1] + discount_factors
+        self.pillars = [p.toordinal() for p in pillar_dates] 
         self.log_discount_factors = [np.log(discount_factor) for discount_factor in self.discount_factors]
-        self.pillar_days = [(pillar_date - obs_date).days for pillar_date in self.pillar_dates]
+        self.interpolator = interp1d(self.pillars, self.log_discount_factors)
         
-    def df(self, d):
+    def df(self, adate):
         """
-        Gets interpolated discount factor at `d`
+        Gets interpolated discount factor at `adate`
 
         Params:
         -------
-        d: datetime.date
+        adate: datetime.date
             actual date at which we would like the interpolated discount factor
         """
-        if d < self.obs_date or d > self.pillar_dates[-1]:
-            print ("Cannot extrapolate discount factors (date: {}).".format(d))
+        d = adate.toordinal()
+        if d < self.pillars[0] or d > self.pillars[-1]:
+            print (f"Cannot extrapolate discount factors (date: {adate}).")
             return None
-        d_days = (d - self.obs_date).days
-        interpolated_log_discount_factor = np.interp(d_days, self.pillar_days, self.log_discount_factors)
-        return np.exp(interpolated_log_discount_factor)
+        return np.exp(self.interpolator(d))
     
     def annualized_yield(self, d):
         """
@@ -297,25 +297,25 @@ class ForwardRateCurve:
     """
     def __init__(self, obs_date, pillars, rates):
         self.obs_date = obs_date
-        self.pillars = pillars
-        self.pillar_days = [(p - obs_date).days/365 for p in pillars]
+        self.pillars = [p.toordinal() for p in pillars]
         self.rates = rates
-
-    def interp_rate(self, d):
+        self.interpolator = interp1d(self.pillars, self.rates)
+        
+    def interp_rate(self, adate):
         """
         Find the rate at time d
         
         Params:
         -------
-        d : datetime.date
+        adate : datetime.date
             date of the interpolated rate
         """
-        d_frac = (d - self.obs_date).days/365
-        if d < self.obs_date or d_frac > self.pillar_days[-1]:
-            print ("Cannot extrapolate rates (date: {}).".format(d))
+        d = adate.toordinal()
+        if d < self.pillars[0] or d > self.pillars[-1]:
+            print (f"Cannot extrapolate rates (date: {adate}).")
             return None, None
         else:
-            return d_frac, np.interp(d_frac, self.pillar_days, self.rates)
+            return d, self.interpolator(d)
 
     def forward_rate(self, d1, d2):
         """
@@ -326,12 +326,12 @@ class ForwardRateCurve:
         d1, d2: datetime.date
             start and end time of the period
         """
-        d1_frac, r1 = self.interp_rate(d1)
-        d2_frac, r2 = self.interp_rate(d2)
-        if d1_frac is None or d2_frac is None:
+        d1, r1 = self.interp_rate(d1)
+        d2, r2 = self.interp_rate(d2)
+        if d1 is None or d2 is None:
             return None
         else:
-            return (r2*d2_frac - r1*d1_frac)/(d2_frac - d1_frac)
+            return (r2*d2 - r1*d1)/(d2 - d1)
     
 class OvernightIndexSwap:
     """
@@ -403,98 +403,10 @@ class OvernightIndexSwap:
         den = self.npv_fixed_leg(dc)/self.fixed_rate
         num = self.npv_floating_leg(dc)
         return num/den
-    
-def call(St, K, r, sigma, ttm):
-    """
-    Compute call price through Black-Scholes formula
-
-    Params:
-    -------
-    St: float
-        underlying spot price
-    K: float
-        option strike
-    r: float
-        risk free interest rate
-    sigma: float
-        underlying volatility
-    ttm: str or list(str)
-        time to maturity
-    """
-    if type(ttm) == list:
-        ttm = np.array([maturity_from_str(t, "y") for t in ttm])
-    else:
-        ttm = maturity_from_str(ttm, "y")
-    return (St*norm.cdf(d_plus(St, K, r, sigma, ttm)) -
-            K*np.exp(-r*(ttm))*norm.cdf(d_minus(St, K, r, sigma, ttm)))
-
-def put(St, K, r, sigma, ttm):
-    """
-    Computes put price through Black-Scholes formula
-
-    Params:
-    -------
-    St: float
-        underlying spot price
-    K: float
-        option strike
-    r: float
-        risk free interest rate
-    sigma: float
-        underlying volatility
-    ttm: str
-        time to maturity
-    """
-    if type(ttm) == list:
-        ttm = np.array([maturity_from_str(t, "y") for t in ttm])
-    else:
-        ttm = maturity_from_str(ttm, "y")
-    return (K*np.exp(-r*(ttm))*norm.cdf(-d_minus(St, K, r, sigma, ttm)) -
-            St*norm.cdf(-d_plus(St, K, r, sigma, ttm)))
-    
-def d_plus(St, K, r, sigma, ttm):
-    """
-    Computes d_plus coefficient for Black-Scholes formula
-
-    Params:
-    -------
-    St: float
-        underlying price
-    K: float
-        option strike
-    r: float
-        risk free interest rate
-    sigma: float
-        underlying volatility
-    ttm: float
-        time to maturity in years
-    """
-    num = np.log(St/K) + (r + 0.5*sigma**2)*(ttm)
-    den = sigma*np.sqrt(ttm)
-    return num/den
-
-def d_minus(St, K, r, sigma, ttm):
-    """
-    Computes d_minus coefficient for Black-Scholes formula
-
-    Params:
-    -------
-    St: float
-        underlying price
-    K: float
-        option strike
-    r: float
-        risk free interest rate
-    sigma: float
-        underlying volatility
-    ttm: float
-        time to maturity in years
-    """
-    return d_plus(St, K, r, sigma, ttm) - sigma*np.sqrt(ttm)
 
 class ParAssetSwap:
     """
-    A class to represent interest rate swaps
+    A class to represent par asset swaps
 
     Attributes:
     -----------

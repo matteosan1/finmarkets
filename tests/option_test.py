@@ -6,7 +6,7 @@ from numpy.random import normal, seed
 from datetime import date
 from dateutil.relativedelta import relativedelta
 
-from finmarkets import call, maturity_from_str
+from options import call, maturity_from_str, AsianOption
 
 class Test_Options(unittest.TestCase):
   def test_call(self):
@@ -33,6 +33,39 @@ class Test_Options(unittest.TestCase):
     self.assertAlmostEqual(C_BS, 11.388, places=3)
     #print ("BS call price: {:.3f}".format(C_BS))
 
-print ("\nTest European Option")
+class Test_AsianOptions(unittest.TestCase):
+    def test_asiancall(self):
+      S0 = 100
+      ttm = "1y"
+      sigma = 0.2
+      r = 0.05
+      K = 90
+      N = 1000
+
+      prices = np.zeros(3)
+      errs = np.zeros(3)
+
+      opt = AsianOption(S0, K, r, sigma, ttm)
+      p, e = opt.simulate_naive(N)
+      #print ("{:.3f} +- {:.4f}".format(p, e))
+      prices[0] = p
+      errs[0] = e
+      
+      p, e = opt.simulate_antithetic(N)
+      #print ("{:.3f} +- {:.4f}".format(p, e))
+      prices[1] = p
+      errs[1] = e
+      
+      p, e = opt.simulate_control_variate(N)
+      #print ("{:.3f} +- {:.4f}".format(p, e))
+      prices[2] = p
+      errs[2] = e
+
+      res = np.array([27.434, 27.685, 27.889])
+      err_res = np.array([1.0573, 0.4783, 0.1474])
+      self.assertIsNone(np.testing.assert_array_almost_equal(prices, res, decimal=3))
+      self.assertIsNone(np.testing.assert_array_almost_equal(errs, err_res, decimal=3))
+
+print ("\nTest European and Asian Options")
 if __name__ == '__main__':
     unittest.main()
