@@ -80,7 +80,8 @@ setup(
         'License :: OSI Approved :: MIT License',  
         'Programming Language :: Python :: 3',
         'Natural Language :: English',
-        'Topic :: Office/Business :: Financial'
+        'Topic :: Education',
+        'Topic :: Office/Business :: Financial',
         'Operating System :: Unix',
         'Operating System :: POSIX',
         'Operating System :: Microsoft :: Windows',        
