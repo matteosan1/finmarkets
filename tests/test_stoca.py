@@ -1,8 +1,7 @@
 import unittest
 import numpy as np
-import matplotlib.pyplot as plt
 
-from stochastic import LogNormalEv
+from finmarkets import LogNormalEv
 
 class Test_Stocha(unittest.TestCase):
     def test_call_price(self):

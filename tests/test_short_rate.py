@@ -1,12 +1,12 @@
 import unittest
 import numpy as np
 
-from short_rate import VasicekModel, CIRModel
+from finmarkets.short_rates import vasicek, cir
 
 class Test_ShortRate(unittest.TestCase):
     def test_vasicek(self):
         r0 = 0.03
-        v = VasicekModel(0.3, 0.10, 0.03)
+        v = vasicek.VasicekModel(0.3, 0.10, 0.03)
         n = 1000
         T = 1
         m = 100
@@ -27,7 +27,7 @@ class Test_ShortRate(unittest.TestCase):
         #print ("MC Std Error: {:.4f}".format(np.std(res)/np.sqrt(n)))
 
     def test_cir(self):
-        c = CIRModel(0.3, 0.07, 0.03)
+        c = cir.CIRModel(0.3, 0.07, 0.03)
         r = c.r_generator(0.01875, 10)
         b = np.array([0.01875    ,0.02239759 ,0.0229571  ,0.02360919 ,0.02343687 ,0.02609064,
                       0.02388111 ,0.02782265 ,0.02788343 ,0.02965233 ,0.03045538 ,0.03406238,

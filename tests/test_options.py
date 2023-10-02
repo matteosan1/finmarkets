@@ -6,7 +6,9 @@ from numpy.random import normal, seed
 from datetime import date
 from dateutil.relativedelta import relativedelta
 
-from options import call, maturity_from_str, AsianOption
+from finmarkets.options.vanilla import call
+from finmarkets.options.asian import AsianOption
+from finmarkets import maturity_from_str
 
 class Test_Options(unittest.TestCase):
   def test_call(self):
