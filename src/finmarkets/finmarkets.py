@@ -162,16 +162,19 @@ class CreditCurve:
     -----------
     obs_date: datetime.date
         observation date
-    pillar_date: list(datetime.date)
+    pillars: list(datetime.date)
         pillar dates of the curve
     ndps: list(float)
         non-default probabilities
     """    
-    def __init__(self, obs_date, pillar_dates, ndps):
+    def __init__(self, obs_date, pillars, ndps):
         self.obs_date = obs_date
-        self.pillar_dates = [obs_date] + pillar_dates
-        self.pillar_days = [(pd - obs_date).days for pd in self.pillar_dates]
-        self.ndps = np.insert(np.array(ndps), 0, 1)
+        if obs_date not in pillars:
+            pillars = [obs_date] + pillars
+            ndps = np.insert(ndps, 0, 1)
+        self.pillars = [d.toordinal() for d in pillars]
+        self.ndps = ndps
+        self.interpolator = (self.pillars, self.ndps)
         
     def ndp(self, d):
         """
@@ -182,11 +185,11 @@ class CreditCurve:
         d: datatime.date
             the interpolation date
         """
-        d_days = (d - self.obs_date).days
-        if d < self.obs_date or d_days > self.pillar_days[-1]:
-            print ("Cannot extrapolate survival probabilities (date: {}).".format(d))
+        d_days = d.toordinal()
+        if d < self.pillars[0] or d > self.pillar[-1]:
+            print (f"Cannot extrapolate survival probabilities (date: {d}).")
             return None
-        return np.interp(d_days, self.pillar_days, self.ndps)
+        return self.interpolator(d_days)
     
     def hazard(self, d):
         """
@@ -199,11 +202,13 @@ class CreditCurve:
         """
         ndp_1 = self.ndp(d)
         ndp_2 = self.ndp(d + relativedelta(days=1))
+        if ndp_1 is None or ndp_2 is None:
+            return None
         delta_t = 1.0 / 365.0
         h = -1.0 / ndp_1 * (ndp_2 - ndp_1) / delta_t
         return h
 
-class ExpDefault(rv_continuous):
+class PoissonProcess(rv_continuous):
     """
     A class to describe lambda * exp(-lambda*x) distributions, inherits from rv_continuous.
     

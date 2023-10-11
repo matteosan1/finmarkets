@@ -7,7 +7,7 @@ from scipy.optimize import brentq
 from scipy.integrate import quad
 
 from .dates import generate_dates
-from .finmarkets import ExpDefault, CreditCurve
+from .finmarkets import PoissonProcess, CreditCurve
 
 class Bond:
     """
@@ -397,7 +397,7 @@ class BasketDefaultSwaps:
                  spread, tenor="3m", recovery=0.4):
         self.cds = CreditDefaultSwap(nominal, start_date, maturity,
                                      spread, tenor, recovery)
-        self.Q = ExpDefault(l=hazard_rate)
+        self.Q = PossionProcess(l=hazard_rate)
         self.N = N
         self.rho = rho
         self.cc = None
