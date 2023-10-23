@@ -255,5 +255,4 @@ class PoissonProcess(rv_continuous):
             values where to compute the distribution PPF
         """
         return -np.log(1-x)/self.l
-
     

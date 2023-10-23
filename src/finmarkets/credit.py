@@ -6,8 +6,33 @@ from scipy.stats import norm, binom, multivariate_normal
 from scipy.optimize import brentq
 from scipy.integrate import quad
 
-from .dates import generate_dates
+from .dates import generate_dates, dates_diff
 from .finmarkets import PoissonProcess, CreditCurve
+
+def generateCreditCurve(start_date, end_date, tenor, process=PoissonProcess, kwargs={"l":0.1}):
+    """
+    A function returning a CreditCurve according to a given process.
+
+    Params:
+    -------
+    start_date: datetime.date
+        start date of the credit curve
+    end_date: datetime.date
+        end date of the credit curve
+    tenor: str
+        string representing the curve tenor
+    process: scipy.stats.rv:continuous 
+        distribution of the default process (default: PoissonProcess)
+    kwargs: dict
+        additional parameters to be passed to the process function
+    """
+    maturity = f"{round(dates_diff(start_date, end_date), 0)}m"
+    pillars = generate_dates(start_date, maturity, tenor)
+    proc = process(**kwargs)
+    dps = [proc.cdf((p-start_date).days/365) for p in pillars]
+    ndps = [1-dp for dp in dps]
+    cc = CreditCurve(start_date, pillars, ndps)
+    return cc
 
 class Bond:
     """

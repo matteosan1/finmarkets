@@ -18,7 +18,7 @@ def maturity_from_str(maturity, unit="m"):
     if tag == "y":
         maturity *= 12
     elif tag == "d":
-        maturity /= 30
+        maturity /= 30.417
     elif tag != "m":
         raise ValueError(f"Unrecognized label {tag}")
 
@@ -26,11 +26,16 @@ def maturity_from_str(maturity, unit="m"):
     if unit == "y":
         maturity /= 12
     elif unit == "d":
-        maturity *= 30
+        maturity *= 30.417
     elif unit != "m":
         raise ValueError(f"Unrecognized output unit {unit}")
     
     return maturity
+
+def dates_diff(d1, d2, unit="m"):
+    if d1 > d2:
+        raise ValueError("d1 must be lower than d2.")
+    return (d2 - d1).days/30.417
 
 def generate_dates(start_date, maturity, tenor="1y"):
     """
