@@ -51,12 +51,12 @@ class Test_Irs(unittest.TestCase):
         swaption = InterestRateSwaption(nominal, start_date, exercise_date, maturity, 
                                         volatility, fixed_rate, tenor)
 
-        price_mc, interval = swaption.payoffMC(obs_date, dc, fr)
+        price_mc, interval = swaption.npvMC(obs_date, dc, fr)
         self.assertAlmostEqual(price_mc, 32175.18, delta=1000)
         self.assertAlmostEqual(interval, 176.39, delta=10)
         #print ("MC: {:.2f} +- {:.2f}".format(price_mc, interval))
 
-        price_bs = swaption.payoffBS(obs_date, dc, fr)
+        price_bs = swaption.npvBS(obs_date, dc, fr)
         self.assertAlmostEqual(price_bs, 32384.83, places=2)
         #print ("BS: {:.2f}".format(price_bs))
 

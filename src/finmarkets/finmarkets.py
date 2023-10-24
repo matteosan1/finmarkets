@@ -174,7 +174,7 @@ class CreditCurve:
             ndps = np.insert(ndps, 0, 1)
         self.pillars = [d.toordinal() for d in pillars]
         self.ndps = ndps
-        self.interpolator = (self.pillars, self.ndps)
+        self.interpolator = interp1d(self.pillars, self.ndps)
         
     def ndp(self, d):
         """
@@ -186,7 +186,7 @@ class CreditCurve:
             the interpolation date
         """
         d_days = d.toordinal()
-        if d < self.pillars[0] or d > self.pillar[-1]:
+        if d_days < self.pillars[0] or d_days > self.pillars[-1]:
             print (f"Cannot extrapolate survival probabilities (date: {d}).")
             return None
         return self.interpolator(d_days)

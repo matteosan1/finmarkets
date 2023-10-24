@@ -301,8 +301,8 @@ class CreditDefaultSwap:
         """
         npv = 0
         for i in range(1, len(self.payment_dates)):
-            npv += (dc.df(self.payment_dates[i]) *
-                    cc.ndp(self.payment_dates[i]))
+            tau = (self.payment_dates[i] - self.payment_dates[i-1]).days/365
+            npv += dc.df(self.payment_dates[i]) * cc.ndp(self.payment_dates[i]) * tau
         return self.fixed_spread * npv * self.nominal
 
     def npv_default_leg(self, dc, cc):
@@ -422,7 +422,7 @@ class BasketDefaultSwaps:
                  spread, tenor="3m", recovery=0.4):
         self.cds = CreditDefaultSwap(nominal, start_date, maturity,
                                      spread, tenor, recovery)
-        self.Q = PossionProcess(l=hazard_rate)
+        self.Q = PoissonProcess(l=hazard_rate)
         self.N = N
         self.rho = rho
         self.cc = None

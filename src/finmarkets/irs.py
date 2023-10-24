@@ -254,7 +254,7 @@ class InterestRateSwaption:
         self.exercise_date = exercise_date
         self.sigma = volatility
         
-    def payoffBS(self, obs_date, dc, fc):
+    def npvBS(self, obs_date, dc, fc):
         """
         Estimates the swaption NPV using Black-Scholes formula
         
@@ -276,7 +276,7 @@ class InterestRateSwaption:
         dm = (np.log(S/K) - 0.5*self.sigma**2*T)/(self.sigma*np.sqrt(T))
         return N*A*(S*norm.cdf(dp)-K*norm.cdf(dm))
     
-    def payoffMC(self, obs_date, dc, fc, n_scenarios=10000, seed=1):
+    def npvMC(self, obs_date, dc, fc, n_scenarios=10000, seed=1):
         """
         Estimates the swaption NPV with Monte Carlo Simulation
         
@@ -288,17 +288,16 @@ class InterestRateSwaption:
             the curve to discount the npv
         fc: ForwardRateCurve
             forward curve to compute the swap rate
-        n_scenarios: int
+        n_scenarios: int (default = 10000)
             number of Monte Carlo experiment to simulate
+        seed: int (default = 1)
+            seed for the random number generator
         """
         np.random.seed(seed)
         T = (self.exercise_date - obs_date).days/365
-        payoffs = []
         S0 = self.irs.swap_rate(dc, fc)
-        for _ in range(n_scenarios):
-            S = S0 * np.exp(-self.sigma**2/2*T + self.sigma*np.random.normal()*np.sqrt(T))
-            payoff = self.irs.nominal*max(0, S - self.irs.fixed_rate)*self.irs.annuity(dc)
-            payoffs.append(payoff)
-        payoff = np.mean(payoffs)
+        S = S0 * np.exp(-self.sigma**2/2*T + self.sigma*np.random.normal(size=n_scenarios)*np.sqrt(T))
+        payoffs = self.irs.nominal*np.maximum(0, S - self.irs.fixed_rate)*self.irs.annuity(dc)
+        npv = np.mean(payoffs)
         one_sigma = np.std(payoffs)/np.sqrt(n_scenarios)
-        return payoff, one_sigma
+        return npv, one_sigma
