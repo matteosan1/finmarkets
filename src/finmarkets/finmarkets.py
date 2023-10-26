@@ -255,4 +255,15 @@ class PoissonProcess(rv_continuous):
             values where to compute the distribution PPF
         """
         return -np.log(1-x)/self.l
+
+    def default_times(self, x):
+        """
+        Returns a list of default times according to the Poisson Process
+
+        Params:
+        -------
+        x: float or numpy.array
+            set of probabilites to compute the default times
+        """
+        return self.ppf(x)
     
