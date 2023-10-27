@@ -510,7 +510,7 @@ class BasketDefaultSwaps:
         ndps = []
         for t in Ts:
             entity_defs_per_sim = np.sum(default_times <= t, axis=1)
-            tot_defs = np.sum(entity_defs_per_sim >= n_defaults)
+            tot_defs = np.sum(entity_defs_per_sim >= nth_default)
             ndps.append(1 - tot_defs/simulations)
         self.cc = CreditCurve(obs_date, pillars, ndps)
 

@@ -9,6 +9,7 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 
 from finmarkets import DiscountCurve, CreditCurve, CreditDefaultSwap, BasketDefaultSwaps
+from finmarkets import PoissonProcess, GaussianCopula
 
 class Test_Credit(unittest.TestCase):
   def test_credit_curve(self):
@@ -81,15 +82,20 @@ class Test_Credit(unittest.TestCase):
     obs_date = date(2022, 10, 1)
     n_cds = 10
     rho = 0.3
-    l = 0.06
+    
     pillar_dates = [obs_date + relativedelta(years=i) for i in range(1, 6)]
     dfs = [1/(1+0.05)**i for i in range(1, 6)]
     dc = DiscountCurve(obs_date, pillar_dates, dfs)
 
-    basket = BasketDefaultSwaps(1, n_cds, l, rho, obs_date, "2y", 0.01, "3m")
-    basket.credit_curve(obs_date, pillar_dates, 3)
-    self.assertAlmostEqual(basket.npv(dc), 0.07148635053489855, delta=0.002)
-    #print (basket.npv(dc))
+    cov = np.ones(shape=(n_cds, n_cds))*rho
+    np.fill_diagonal(cov, 1)
+    g = GaussianCopula(n_cds, cov)
+    def_func = PoissonProcess(l=0.06)
+    
+    basket = BasketDefaultSwaps(1, n_cds, obs_date, "2y", 0.01)
+    basket.credit_curve(3, g, def_func, obs_date, pillar_dates)
+    npv = basket.npv(dc)
+    self.assertAlmostEqual(npv, 0.07148635053489855, delta=0.002)
 
 print ("\nTest Credit")
 if __name__ == '__main__':
