@@ -3,6 +3,7 @@ import numpy as np
 from dateutil.relativedelta import relativedelta
 
 from scipy.stats import norm, binom, multivariate_normal
+from scipy.stats import chi2, t
 from scipy.optimize import brentq
 from scipy.integrate import quad
 
@@ -393,6 +394,68 @@ def gaussian_copula_default(N, Q, pillars, cov, n_def, simulations=10000, seed=1
     S_corr = np.array([(1-(default_times[:, n_def-1] <= t).mean()) for t in Ts])
     return S_corr
 
+class GaussianCopula:
+    """
+    Class that implements a numerical Gaussian copula
+
+    Params:
+    -------
+    n: int
+        number of dimensions
+    cov: np.array
+        covariance matrix that models the correlation
+    """
+    def __init__(self, n, cov):
+        self.mv = multivariate_normal(mean=np.zeros(n), cov=cov)
+
+    def sample(self, size):
+        """
+        Method that samples from the copula
+
+        Params:
+        -------
+        size: int
+            number of samples to be generated
+        """
+        x = self.mv.rvs(size=size)
+        return norm.cdf(x)
+
+class TCopula:
+    """
+    Class that implements a numerical t-student copula
+
+    Params:
+    -------
+    n: int
+        number of dimensions
+    cov: np.array
+        covariance matrix that models the correlation
+    nu: int
+        degrees of freedom of the chi2 (default 2)
+    """
+    def __init__(self, n, cov, nu=2):
+        self.sigma = cov
+        self.L = np.linalg.cholesky(self.sigma)
+        self.mv = multivariate_normal(mean=np.zeros(n), cov=[[1, 0], [0, 1]])
+        self.nu = nu
+
+    def sample(self, size):
+        """
+        Method that samples from the copula
+        
+        Params:
+        -------
+        size: int
+            number of samples to be generated
+        """
+        Y = self.mv.rvs(size=size)
+        L = np.linalg.cholesky(self.sigma)
+        Z = Y.dot(L)
+        S = chi2(self.nu).rvs(size=size)
+        Z[:, 0] = np.sqrt(self.nu/S)*Z[:, 0]
+        Z[:, 1] = np.sqrt(self.nu/S)*Z[:, 1]
+        return t(self.nu).cdf(Z)
+    
 class BasketDefaultSwaps:
     """
     A class to valuate basket default swaps
@@ -403,10 +466,6 @@ class BasketDefaultSwaps:
         nominal of the swap
     N: int
         number of reference entities underlying the BDS
-    hazard_rate: float
-        annualized hazard rate
-    rho: float
-        correlation factor for the defaults
     start_date: datetime.date
         starting date of the contract
     maturity: str
@@ -418,37 +477,34 @@ class BasketDefaultSwaps:
     recovery: float
         recovery parameter in case of default, default value is 40%
     """    
-    def __init__(self, nominal, N, hazard_rate, rho, start_date, maturity,
-                 spread, tenor="3m", recovery=0.4):
+    def __init__(self, nominal, N, start_date, maturity, spread, tenor="3m", recovery=0.4):
         self.cds = CreditDefaultSwap(nominal, start_date, maturity,
                                      spread, tenor, recovery)
-        self.Q = PoissonProcess(l=hazard_rate)
         self.N = N
-        self.rho = rho
         self.cc = None
-        
-    def gaussian_copula(self, simulations):
-        cov = np.ones(shape=(self.N, self.N))*self.rho
-        np.fill_diagonal(cov, 1)
-        mv = multivariate_normal(mean=np.zeros(self.N), cov=cov)
-        x = mv.rvs(size=simulations)
-        return norm.cdf(x)
-    
-    def credit_curve(self, obs_date, pillars, n_defaults, simulations=100000):
+
+    def credit_curve(self, nth_default, copula_func, default_prob, obs_date, 
+                   pillars, simulations=100000):
         """
         Computes the credit curve needed for the BDS valuation
 
         Params:
         -------
+        nth_default: int
+            number of defaults required by the BDS
+        copula_func: GaussianCopula
+            the copula object to model correlation
+        default_prob: scipy.stats.rvcontinuous
+            function describing the default probability
         obs_date: datetime.date
             observation date
         pillars: list(datetime.date) 
-            pillar dates to determine credit curve
-        n_defaults: int
-            number of defaults required by the BDS
+            pillar dates to determine credit curve (default None)
+        simulations: int
+            number of samples to model the copula (default 100000)
         """
-        copula = self.gaussian_copula(simulations)
-        default_times = self.Q.ppf(copula)
+        copula_sample = copula_func.sample(simulations)
+        default_times = default_prob.ppf(copula_sample)
 
         Ts = [(p-obs_date).days/365 for p in pillars]
         ndps = []
@@ -481,6 +537,9 @@ class BasketDefaultSwaps:
         dc: DiscountCurve 
             discount curve to valuate the contract
         """
+        if self.cc is None:
+            print ("Need to call credit_curve method first !")
+            return None
         return self.cds.breakevenRate(dc, self.cc)
 
 class BasketDefaultSwapsOneFactor:
