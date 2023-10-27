@@ -426,8 +426,15 @@ class BasketDefaultSwaps:
         self.N = N
         self.rho = rho
         self.cc = None
-
-    def credit_curve(self, obs_date, pillars, n_defaults):
+        
+    def gaussian_copula(self, simulations):
+        cov = np.ones(shape=(self.N, self.N))*self.rho
+        np.fill_diagonal(cov, 1)
+        mv = multivariate_normal(mean=np.zeros(self.N), cov=cov)
+        x = mv.rvs(size=simulations)
+        return norm.cdf(x)
+    
+    def credit_curve(self, obs_date, pillars, n_defaults, simulations=100000):
         """
         Computes the credit curve needed for the BDS valuation
 
@@ -440,20 +447,15 @@ class BasketDefaultSwaps:
         n_defaults: int
             number of defaults required by the BDS
         """
-        simulations = 100000
-        cov = np.ones(shape=(self.N, self.N))*self.rho
-        np.fill_diagonal(cov, 1)
-        mean = np.zeros(self.N)
-        mv = multivariate_normal(mean=mean, cov=cov)
-        x = mv.rvs(size=simulations)
-        x_unif = norm.cdf(x)
-        default_times = self.Q.ppf(x_unif)
+        copula = self.gaussian_copula(simulations)
+        default_times = self.Q.ppf(copula)
 
-        Ts = [(p-obs_date).days/360 for p in pillars]
+        Ts = [(p-obs_date).days/365 for p in pillars]
         ndps = []
         for t in Ts:
-            b = np.count_nonzero(default_times<=t, axis=1)
-            ndps.append(1 - len(b[b>=n_defaults])/simulations)
+            entity_defs_per_sim = np.sum(default_times <= t, axis=1)
+            tot_defs = np.sum(entity_defs_per_sim >= n_defaults)
+            ndps.append(1 - tot_defs/simulations)
         self.cc = CreditCurve(obs_date, pillars, ndps)
 
     def npv(self, dc):
@@ -469,7 +471,7 @@ class BasketDefaultSwaps:
             print ("Need to call credit_curve method first !")
             return None
         return self.cds.npv(dc, self.cc)
-  
+    
     def breakeven(self, dc):
         """
         Computes the breakeven of the BDS
@@ -480,7 +482,7 @@ class BasketDefaultSwaps:
             discount curve to valuate the contract
         """
         return self.cds.breakevenRate(dc, self.cc)
-    
+
 class BasketDefaultSwapsOneFactor:
     """
     A class to represent basket default swaps whose valuation relies on the Gaussian One Factor Model
