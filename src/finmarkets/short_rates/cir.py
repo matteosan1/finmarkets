@@ -1,5 +1,6 @@
 import numpy as np
-from numpy.random import seed, normal
+
+from finmarkets import maturity_from_str
 
 class CIRModel:
     """
@@ -19,20 +20,8 @@ class CIRModel:
         self.theta = theta
         self.sigma = sigma
         self.gamma = np.sqrt(self.k**2 + 2*self.sigma**2)
-        self.setSeed()
-
-    def setSeed(self, aseed=1):
-        """
-        Sets the seed of the random number generator
         
-        Params:
-        -------
-        aseed: int
-            The seed to set
-        """
-        seed(aseed)
-        
-    def r_generator(self, r0, T, m=100):
+    def r_generator(self, r0, dates, seed=1):
         """
         Evolves the short rate
         
@@ -40,12 +29,17 @@ class CIRModel:
         -------
         r0: float
            Initial rate value
-        T: float
-           The length of the rate evolution
-        m: int
-           Number of steps of the evolution
+        dates: list(datetime.date)
+           List of dates at which compute r
+        seed: int
+           Seed for the simulation (default=1)
         """
-        dt = T/m
+        if len(dates) < 2:
+            print ("You need to pass at least two dates")
+            return None
+        np.random.seed(seed)
+        dt = (dates[1] - dates[0]).days/365
+        m = len(dates)
         r = np.zeros(shape=(m,))
         r[0] = r0
         for i in range(1, m):
@@ -69,9 +63,10 @@ class CIRModel:
         
         Params:
         -------
-        T: float
+        T: str
             Maturity of the bond
         r0: float
             Initial value of the rate
         """
+        T = maturity_from_str(T, "y")
         return self._A(T)*np.exp(-r0*self._B(T))

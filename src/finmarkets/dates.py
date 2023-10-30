@@ -37,7 +37,7 @@ def dates_diff(d1, d2, unit="m"):
         raise ValueError("d1 must be lower than d2.")
     return (d2 - d1).days/30.417
 
-def generate_dates(start_date, maturity, tenor="1y"):
+def generate_dates(start_date, maturity, tenor="1y", unit="m"):
     """
     Computes a set of dates given starting date and length in months.
 
@@ -49,11 +49,32 @@ def generate_dates(start_date, maturity, tenor="1y"):
         maturity that defines the length of the list of dates
     tenor: str
         tenor of the list of dates, by default is 12 months
+    unit: str
+        unit to compute shifts
     """
-    maturity_months = int(round(maturity_from_str(maturity), 0))
-    tenor_months = int(round(maturity_from_str(tenor), 0))
+    shift = {"years":0, "months":0, "days":0}
+    final_shift = {"years":0, "months":0, "days":0}
+    maturity = int(round(maturity_from_str(maturity, unit), 0))
+    tenor = int(round(maturity_from_str(tenor, unit), 0))
+
     dates = []
-    for d in range(0, maturity_months, tenor_months):
-        dates.append(start_date + relativedelta(months=d))
-    dates.append(start_date + relativedelta(months=maturity_months))
+    
+    for d in range(0, maturity, tenor):
+        if unit.lower() == "d":
+            dates.append(start_date + relativedelta(days=d))
+        elif unit.lower() == "m":
+            dates.append(start_date + relativedelta(months=d))
+        elif unit.lower() == "y":
+            dates.append(start_date + relativedelta(years=d))
+
+
+    if unit.lower() == "d":
+        dates.append(start_date + relativedelta(days=maturity))
+    elif unit.lower() == "m":
+        dates.append(start_date + relativedelta(months=maturity))
+    elif unit.lower() == "y":
+        dates.append(start_date + relativedelta(years=maturity))
     return dates
+
+if __name__ == "__main__":
+    print (generate_dates(date(2023, 10, 20), "1y", "1m", "d"))
