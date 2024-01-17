@@ -101,7 +101,7 @@ class InterestRateSwap:
         self.fix_dates = generate_dates(start_date, maturity, tenor_fix)
         self.float_dates = generate_dates(start_date, maturity, tenor_float)
 
-    def annuity(self, dc):
+    def annuity(self, dc, current_date=None):
         """
         Computes the fixed leg annuity
 
@@ -109,9 +109,16 @@ class InterestRateSwap:
         -------
         dc: DiscountCurve
             discount curve object used for the annuity
+        current_date: datetime.date
+            calculation date for the annuity, if None it is set to the IRS start_date
         """
+        if current_date is None:
+            current_date = self.fix_dates[0]
+
         a = 0
         for i in range(1, len(self.fix_dates)):
+            if current_date > self.fix_dates[i]:
+                continue
             tau = (self.fix_dates[i]-self.fix_dates[i-1]).days/360
             a += tau*dc.df(self.fix_dates[i])
         return a
