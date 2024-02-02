@@ -1,8 +1,11 @@
 import numpy as np
 
 from scipy.stats import norm
+from enum import IntEnum
 
 from .dates import generate_dates
+
+SwapType = IntEnum("SwapType", {"Receiver":-1, "Payer":1})
 
 class OvernightIndexSwap:
     """
@@ -18,11 +21,14 @@ class OvernightIndexSwap:
         maturity of the swap.
     fixed_rate: float
         rate of the fixed leg of the swap
+    type: SwapType
+        type of the swap. default is SwapType.Payer
     """
-    def __init__(self, nominal, start_date, maturity, fixed_rate):
+    def __init__(self, nominal, start_date, maturity, fixed_rate, type=SwapType.Payer):
         self.nominal = nominal
         self.fixed_rate = fixed_rate
         self.payment_dates = generate_dates(start_date, maturity)
+        self.type = type
       
     def npv_floating(self, dc):
         """
@@ -60,7 +66,7 @@ class OvernightIndexSwap:
         dc: DiscountCurve
             discount curve to be used in the calculation
         """
-        return self.npv_floating(dc) - self.npv_fixed(dc)
+        return self.npv_floating(dc) - self.npv_fixed(dc)*self.type
 
     def fair_value_strike(self, dc):
         """
@@ -93,13 +99,16 @@ class InterestRateSwap:
         tenor of the float leg
     tenor_fix: str
         tenor of the fixed leg. default value is 1 year
+    type: SwapType
+        type of the swap, either Receiver or Payer. Default: Receiver
     """    
     def __init__(self, nominal, start_date, maturity,
-                 fixed_rate, tenor_float, tenor_fix="12m"):
+                 fixed_rate, tenor_float, tenor_fix="12m", type=SwapType.Payer):
         self.nominal = nominal
         self.fixed_rate = fixed_rate
         self.fix_dates = generate_dates(start_date, maturity, tenor_fix)
         self.float_dates = generate_dates(start_date, maturity, tenor_float)
+        self.type = type
 
     def annuity(self, dc, current_date=None):
         """
@@ -136,7 +145,7 @@ class InterestRateSwap:
         """
         S = self.swap_rate(dc, fc)
         A = self.annuity(dc)
-        return self.nominal * (S - self.fixed_rate) * A
+        return self.nominal * (S - self.fixed_rate) * A * self.type
 
     def bpv(self, dc):
         return 0.0001*self.annuity(dc)
