@@ -1,6 +1,7 @@
-import numpy as np
+import numpy as np, tensorflow as tf
 
 from scipy.stats import norm
+from scipy.optimize import newton
 from enum import IntEnum
 
 from .dates import generate_dates
@@ -168,6 +169,56 @@ class InterestRateSwap:
             D = dc.df(self.float_dates[j])
             num += F * tau * D
         return num/self.annuity(dc)
+        
+    def npv_with_delta(self, dc, fc, dr=0, dzero_rate=0):
+      fixed_pv = tf.Variable(0.0)
+      float_pv = tf.Variable(0.0)
+      zero_rate_fix = tf.Variable([dc.rate(d) for d in self.fix_dates], name="zero_rate_fix")
+      zero_rate_float = tf.Variable([dc.rate(d) for d in self.float_dates], name="zero_rate_float")
+      float_rates = tf.Variable([fc.forward_rate(self.float_dates[i-1], self.float_dates[i]) 
+          for i in range(len(self.float_dates))], name="float_rates")
+
+      fixed_pv_dot = 0
+      float_pv_dot = 0
+      with tf.GradientTape(persistent=True) as tape:
+        for i in range(1, len(self.fix_dates)):
+          tau = (self.fix_dates[i]-self.fix_dates[i-1]).days/360
+          dt = (self.fix_dates[i]-self.fix_dates[0]).days/365
+          fixed_pv += self.N*self.K*tau*tf.math.exp(-zero_rate_fix[i]*dt)
+        if dzero_rate != 0:
+          fixed_pv_dot += dzero_rate*sum(tape.gradient(fixed_pv, zero_rate_fix))
+
+        for i in range(1, len(self.float_dates)):
+          tau = (self.float_dates[i]-self.float_dates[i-1]).days/360
+          dt = (self.float_dates[i]-self.float_dates[0]).days/365
+          float_pv += self.N*float_rates[i]*tau*tf.math.exp(-zero_rate_float[i]*dt)      
+        if dzero_rate != 0:
+          float_pv_dot += dzero_rate*sum(tape.gradient(float_pv, zero_rate_float))
+        if dr != 0:
+          float_pv_dot += sum(tape.gradient(float_pv, float_rates)*float_rates_dot)
+
+      swap_pv = self.side*(fixed_pv - float_pv)
+      swap_pv_dot = self.side*(fixed_pv_dot - float_pv_dot)
+
+      return swap_pv, swap_pv_dot
+
+    def delta_tangent_mode(self, dc fc, dr, dzero_rate):
+      fixed_pv_dot = 0.0
+      float_pv_dot = 0.0
+
+      for i in range(1, len(self.fix_dates)):
+          tau = (self.fix_dates[i]-self.fix_dates[i-1]).days/360
+          dt = (self.fix_dates[i]-self.fix_dates[0]).days/360
+          fixed_pv_dot += -dt*self.N*self.K*tau*dc.df(self.fix_dates[i])* dzero_rate
+
+      for i in range(1, len(self.float_dates)):
+          tau = (self.float_dates[i]-self.float_dates[i-1]).days/360
+          dt = (self.float_dates[i]-self.float_dates[0]).days/360
+          float_pv_dot += self.N*tau*dc.df(self.float_dates[i])*dr
+          float_pv_dot += -dt*self.N*fc.fowrard_rate(self.float_dates[i-1], self.float_dates[i])*tau*dc.df(self.float_dates[i])*dzero_rate
+
+      return self.side*(fixed_pv_dot - float_pv_dot)
+
 
 class Cap:
     """
@@ -317,3 +368,60 @@ class InterestRateSwaption:
         npv = np.mean(payoffs)
         one_sigma = np.std(payoffs)/np.sqrt(n_scenarios)
         return npv, one_sigma
+
+class SwaptionShortRate:
+    def __init__(self, notional, expiry, tenor, strike, type, model):
+        self.expiry = expiry
+        self.tenor = tenor
+        self.K = strike
+        self.N = notional
+        self.type = type
+        self.model = model
+
+    def annuity(self):
+        #terms = np.linspace(int(self.expiry+1), int(self.expiry + self.tenor), int(self.tenor))
+        terms = np.linspace(self.expiry+1, self.expiry + self.tenor, self.tenor)
+        return sum(self.model.zero_bond(0, t) for t in terms)
+
+    def forward_swap_rate(self):
+        """
+        Calculates the forward swap rate at expiry for a given tenor.
+        Assumes annual payments for simplicity.
+        """
+        terms = np.linspace(self.expiry+1, self.expiry + self.tenor, self.tenor)
+        P0 = self.model.zero_bond(0, self.expiry)
+        Pn = self.model.zero_bond(0, self.expiry+self.tenor)
+        sum_P = sum(self.model.zero_bond(0, t) for t in terms)
+        return (P0 - Pn)/self.annuity()
+
+  # def jamshidian_decomposition(expiry, tenor, strike, a, sigma):
+  #   """
+  #   Performs Jamshidian's decomposition to find the critical rate.
+  #   """
+  #   def integrand(t):
+  #     return zero_bond(0, t) * stats.norm.pdf(
+  #       (np.log(zero_bond(t, expiry + tenor) / zero_bond(t, expiry)) + (a**2 * tenor) / (2 * sigma**2)) /
+  #       (sigma * np.sqrt(tenor) / a)
+  #     )
+  #   kappa = quad(integrand, 0, expiry)[0]
+  #   return forward_swap_rate(expiry, tenor) + (sigma**2 * tenor * kappa) / (2 * a)
+
+    def jamshidian_decomposition_root_finder(self):
+        """
+        Performs Jamshidian's decomposition using a root finder.
+        """
+        terms = np.linspace(self.expiry+1, self.expiry + self.tenor, self.tenor)
+
+        def objective(critical_rate):
+          bond_portfolio_price = sum(self.model.zero_bond(0, t)*np.maximum(self.K - critical_rate, 0) for t in terms)
+          price_with_critical_rate = bond_portfolio_price + self.N*self.model.zero_bond(0, self.expiry)*np.maximum(critical_rate - self.K, 0)
+          return price_with_critical_rate  # Aim for zero market price
+
+        critical_rate = newton(objective, 0.01)
+        return self.forward_swap_rate() + (self.model.sigma**2*self.tenor*critical_rate)/(2*self.model.a)
+
+    def npv(self):
+        terms = np.linspace(self.expiry+1, self.expiry + self.tenor, self.tenor)
+        critical_rate = self.jamshidian_decomposition_root_finder()
+        bond_portfolio_price = sum(self.model.zero_bond(0, t)*np.maximum(self.K - critical_rate, 0) for t in terms)
+        return bond_portfolio_price + self.type*self.N*self.model.zero_bond(0, self.expiry)*np.maximum(self.type*(critical_rate - self.K), 0)        
