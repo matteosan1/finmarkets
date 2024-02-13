@@ -1,8 +1,44 @@
 import numpy as np
 
 from scipy.stats import norm
+from enum import IntEnum
 
 from .dates import generate_dates
+
+Side = IntEnum("Side", {"Receiver":1, "Payer":-1})
+CapFloorType = IntEnum("CapFloorType", {"Cap":1, "Floor":-1})
+
+# CONTROLLARE SIDE FIXME
+class FRA:
+    """
+    A class to represent Forward Rate Agreements.
+    The valuation of the contract follows Brigo-Mercurio formula.
+
+    Attributes:
+    -----------
+    today: datetime.date
+        princing date
+    notional: float
+        notional of the swap
+    fixing_date: datetime.date
+         fixing date of the contrace
+    maturity: str
+        maturity of the FRA
+    fixed_rate: float
+        fixed rate to exchange
+    """
+  def __init__(self, today, nominal, fixing_date, maturity, fixed_rate):
+    self.t = today
+    self.T = fixing_date
+    self.S = maturity
+    self.N = nominal
+    self.K = fixed_rate
+
+  def npv(self, dc):
+    tau = (self.S - self.T).days/360
+    P_tS = dc.df(self.S)
+    P_tT = dc.df(self.T)
+    return self.N*(P_tS*tau*self.K - P_tT + P_tS)
 
 class OvernightIndexSwap:
     """
@@ -18,11 +54,14 @@ class OvernightIndexSwap:
         maturity of the swap.
     fixed_rate: float
         rate of the fixed leg of the swap
+    side: Side
+        Payer or Receiver type, default Receiver
     """
-    def __init__(self, nominal, start_date, maturity, fixed_rate):
+    def __init__(self, nominal, start_date, maturity, fixed_rate, side=Side.Receiver):
         self.nominal = nominal
         self.fixed_rate = fixed_rate
         self.payment_dates = generate_dates(start_date, maturity)
+        self.side = side
       
     def npv_floating(self, dc):
         """
@@ -60,7 +99,7 @@ class OvernightIndexSwap:
         dc: DiscountCurve
             discount curve to be used in the calculation
         """
-        return self.npv_floating(dc) - self.npv_fixed(dc)
+        return self.side(*self.npv_floating(dc) - self.npv_fixed(dc))
 
     def fair_value_strike(self, dc):
         """
@@ -89,17 +128,36 @@ class InterestRateSwap:
         maturity of the swap.
     fixed_rate: float
         rate of the fixed leg of the swap
-    tenor_float: str
+    frequency_float: str
         tenor of the float leg
-    tenor_fix: str
+    frequency_fix: str
         tenor of the fixed leg. default value is 1 year
+    side: Side
+        define the Payer or Receiver nature of the swap, default Receiver
     """    
     def __init__(self, nominal, start_date, maturity,
-                 fixed_rate, tenor_float, tenor_fix="12m"):
+                 fixed_rate, frequency_float, frequency_fix="12m", side=Side.Receiver):
         self.nominal = nominal
         self.fixed_rate = fixed_rate
-        self.fix_dates = generate_dates(start_date, maturity, tenor_fix)
-        self.float_dates = generate_dates(start_date, maturity, tenor_float)
+        self.fix_dates = generate_dates(start_date, maturity, frequency_fix)
+        self.float_dates = generate_dates(start_date, maturity, frequency_float)
+        self.side = side
+
+    def npv_with_FRA(self, dc):
+        """
+        Compute the npv of the swa[ assuming it is a collection of FRA's
+
+        Params:
+        -------
+        dc: DiscountCurve
+            discount curve to be used in the calculation
+        """
+        fras = []
+        for i in range(1, len(self.dates)):
+            fras.append(FRA(self.dates[0], self.N, self.dates[i-1], self.dates[i], self.K))
+            
+        vals = [self.side*f.npv(dc) for f in fras]
+        return sum(vals), vals
 
     def annuity(self, dc):
         """
@@ -129,9 +187,17 @@ class InterestRateSwap:
         """
         S = self.swap_rate(dc, fc)
         A = self.annuity(dc)
-        return self.nominal * (S - self.fixed_rate) * A
+        return self.side*self.nominal*(self.fixed_rate - S)*A
 
     def bpv(self, dc):
+        """
+        Compute the bpv sensitivity of the IRS
+
+        Params:
+        -------
+        dc: DiscountCurve
+            discount curve to apply in the calculation
+        """
         return 0.0001*self.annuity(dc)
 
     def swap_rate(self, dc, fc):
@@ -153,10 +219,108 @@ class InterestRateSwap:
             num += F * tau * D
         return num/self.annuity(dc)
 
-class Cap:
+    def swap_rate_single_curve(self, dc):
+        """
+        Compute the swap rate of the IRS in the single curve framework
+
+        Params:
+        -------
+        dc: DiscountCurve
+            discount curve object used for swap rate calculation
+        """        
+        den = 0
+        num = dc.df(self.dates[0]) - dc.df(self.dates[-1])
+        for i in range(1, len(self.dates)):
+            tau = (self.dates[i]-self.dates[i-1]).days/360
+            den += dc.df(self.dates[i])*tau
+        return num/den
+
+    def swap_price_tangent_mode_manual(self, float_rates_dot, zero_rate_dot):
+        """
+        Compute the sensitivity to rate using tangent method
+
+        Params:
+        -------
+        float_rates_dot: float
+            delta rate to apply to interest rate
+        fixed_rates_dot: float
+            delta rate to apply to interest rate
+        """
+        fixed_pv = 0.0
+        fixed_pv_dot = 0.0
+
+        for i in range(len(self.fixed_t)):
+            fixed_pv += self.notional * self.fixed_rate * self.fixed_tau[i] * np.exp(-self.zero_rate*self.fixed_t[i])
+            fixed_pv_dot += -self.fixed_t[i] * self.notional * self.fixed_rate * self.fixed_tau[i] * np.exp(-self.zero_rate*self.fixed_t[i]) * zero_rate_dot
+
+        float_pv = 0.0;
+        float_pv_dot = 0.0
+
+        for j in range(len(self.float_t)):
+            float_pv += self.notional * (self.float_rates[j]) * self.float_tau[j] * np.exp(-self.zero_rate*self.float_t[j]) # df = exp(-z*t)
+            float_pv_dot += self.notional * self.float_tau[j] * np.exp(-self.zero_rate*self.float_t[j]) * float_rates_dot[j]
+            float_pv_dot += -self.float_t[j] * self.notional * (self.float_rates[j]) * self.float_tau[j] * np.exp(-self.zero_rate*self.float_t[j]) * zero_rate_dot
+
+        swap_pv = self.side * (fixed_pv - float_pv)
+        swap_pv_dot = self.side * (fixed_pv_dot - float_pv_dot)
+        return swap_pv, swap_pv_dot
+
+
+
+class CapFloorLet:
+    """
+    A class to represent cap/floorlet
+        
+    Attributes:
+    -----------
+    nominal: float
+        nominal of the cap
+    start_date: datetime.date
+        starting date of the contract
+    maturity: str
+        maturity of the cap
+    fixed_rate: float
+        rate of the fixed leg of the swap
+    type: CapFloorType
+        indicate if it is a caplet or a floorlet
+    """    
+    def __init__(self, nominal, start_date, maturity,
+                 fixed_rate, type=CapFloorType.Cap):
+        self.N = nominal
+        self.start = start
+        self.end = start + relativedelta(months=maturity_from_str(maturity, "m"))
+        self.K = fixed
+        self.type = type
+
+    def npv(self, sigma, dc, fc):
+        """
+        Compute the npv of the cap/floorlet using BS formula
+        
+        Params:
+        -------
+        sigma: float
+            volatility of the cap/floorlet
+        dc: DiscountCurve
+            discount curve
+        fc: ForwardRateCurve
+            interest rate term structure
+        """
+        tau = (self.end - self.start).days/360
+        D = dc.df(self.end)
+        F = fc.forward_rate(self.start, self.end)
+        Tf = (self.start - dc.pillar_dates[0]).days/360
+        v = sigma*np.sqrt(Tf)
+        d1 = (np.log(F/self.K)+0.5*v**2)/v
+        d2 = (np.log(F/self.K)-0.5*v**2)/v
+        if self.type == CapFloorType.Cap:
+            return D*(F*norm.cdf(d1)-self.K*norm.cdf(d2))
+        else:
+            return D(self.K*norm.cdf(-d2)-F*norm.cdf(-d1))
+
+class CapFloor:
     """
     A class to represent cap/floor
-
+        
     Attributes:
     -----------
     nominal: float
@@ -172,60 +336,32 @@ class Cap:
     K: float
         strike of the cap
     """    
-    def __init__(self, nominal, start_date, maturity, tenor, K):
+    def __init__(self, nominal, start_date, maturity, tenor, K, type=CapFloorType.Cap):
         self.dates = generate_dates(start_date, maturity, tenor)
         self.K = K
+        self.type = type
+        self.maturity = maturity
+        self.tenor = tenor
+        self.N = nominal
 
-    def caplet_price(self, sigma, fc, dc, start_date, end_date):
+    def npv(self, sigma, dc, fc):
         """
-        Compute a caplet npv
-
+        Compute the npv of the cap as a sum of Cap/Floorlet
+        
         Params:
         -------
         sigma: float
-            caplet volatility
-        fc: ForwardRateCurve
-            forward curve object used for forward rate calculation
+            flat volatility of the Cap
         dc: DiscountCurve
-            discount curve object used for discounting
-        start_date: datetime.date
-            forward start date of the caplet
-        end_date: datetime.date
-            end date of the caplet
+            discount curve
+        fc: ForwardCurve
+            interest rate curve
         """
-        tau = (end_date - start_date).days/360
-        D = dc.df(end_date)
-        F = fc.forward_rate(end_date, start_date)
-        Tf = (end_date - dc.pillar_dates[0]).days/360
-        v = sigma*np.sqrt(Tf)
-        d1 = (np.log(F/self.K)+0.5*v**2)/v
-        d2 = (np.log(F/self.K)-0.5*v**2)/v
-        return D*(F*norm.cdf(d1)-self.K*norm.cdf(d2))
-
-    def npv(self, sigma, fc, dc, target_price=0, debug=False):
-        """
-        Compute cap npv
-
-        Params:
-        -------
-        sigma: float
-            cap volatility
-        fc: ForwardRateCurve
-            forward curve object used for forward rate calculation
-        dc: DiscountCurve
-            discount curve object used for discounting
-        target_price: float
-            optional argument for bootstrapping, default value 0
-        """
-        if debug:
-            print (self.dates)
         val = 0
-        for i in range(1, len(self.dates)):
-            val += self.caplet_price(sigma, fc, dc, 
-                                     self.dates[i-1], self.dates[i])
-        if debug:
-            print (val)
-        return val-target_price
+        for i in range(0, len(self.dates)-1):
+            caplet = CapFloorLet(self.N, self.dates[i], self.tenor, self.K, self.type)
+            val += caplet.npv(sigma, dc, fc)
+        return val
     
 class InterestRateSwaption:
     """

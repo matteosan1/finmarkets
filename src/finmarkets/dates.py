@@ -1,6 +1,37 @@
 from datetime import date
 from dateutil.relativedelta import relativedelta
 
+def dt_from_str(maturity, unit="m"):
+    """
+    Utility to convert time intervals to integers into days, months (default) or years. 
+    The interval has the following format "XXy" with XX the value and y the units (y, Y, m, M, d, D).
+
+    Params:
+    -------
+    maturity: str
+        the string to be converted
+    unit: str
+        time unit of the output, default value is month
+    """
+    tag = maturity[-1].lower()
+    maturity = float(maturity[:-1])
+    if tag == "y":
+        maturity *= 12
+    elif tag == "d":
+        maturity /= 30.417
+    elif tag != "m":
+        raise ValueError(f"Unrecognized label {tag}")
+
+    unit = unit.lower()
+    if unit == "y":
+        return relativedelta(years=label//12)
+    elif unit == "d":
+        return relativedelta(days=int(label*30.417))
+    elif unit != "m":
+        raise ValueError(f"Unrecognized output unit {unit}")
+    else:
+        return relativedelta(months=int(label))
+
 def maturity_from_str(maturity, unit="m"):
     """
     Utility to convert time intervals to integers into days, months (default) or years. 
