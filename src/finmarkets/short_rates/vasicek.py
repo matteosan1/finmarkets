@@ -9,11 +9,11 @@ class VasicekModel:
     Params:
     -------
     k: float
-       k paramter fo Vasicek model
+       k paramter for Vasicek model
     theta: float
-        theta paramter fo Vasicek model
+        theta paramter for Vasicek model
     sigma: float
-        sigma paramter fo Vasicek model
+        sigma paramter for Vasicek model
     """
     def __init__(self, k, theta, sigma):
         self.k = k

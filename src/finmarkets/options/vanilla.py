@@ -1,9 +1,29 @@
 import numpy as np
 
-from scipy.stats.mstats import gmean
 from scipy.stats import norm
+from enum import IntEnum
 
 from finmarkets import maturity_from_str
+
+OptionType = IntEnum("OptionType", {"Call":1, "Put":-1})
+
+def black_scholes(St, K, r, sigma, ttm, option_type):
+    if type(ttm) == list:
+        ttm = np.array([maturity_from_str(t, "y") for t in ttm])
+    else:
+        ttm = maturity_from_str(ttm, "y")
+
+    if option_type == OptionType.Call:
+        return (St*norm.cdf(d_plus(St, K, r, sigma, ttm)) -
+                K*np.exp(-r*(ttm))*norm.cdf(d_minus(St, K, r, sigma, ttm)))
+    else:
+        return (K*np.exp(-r*(ttm))*norm.cdf(-d_minus(St, K, r, sigma, ttm)) -
+                St*norm.cdf(-d_plus(St, K, r, sigma, ttm)))
+
+def black_scholes_shifted(St, K, shift, r, sigma, ttm, option_type):
+    K_shifted = K + shift
+    St_shifted = St + shift
+    return black_scholes(St_shifted, K_shifted, r, sigma, ttm, option_type)
 
 def call(St, K, r, sigma, ttm):
     """
