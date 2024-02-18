@@ -4,11 +4,11 @@ from dateutil.relativedelta import relativedelta
 
 from scipy.stats import norm, binom, multivariate_normal
 from scipy.stats import chi2, t
-from scipy.optimize import brentq
+from scipy.optimize import newton
 from scipy.integrate import quad
 
-from .dates import generate_dates, dates_diff
-from .finmarkets import PoissonProcess, CreditCurve
+from .dates import generate_dates, dates_diff, dt_from_str
+from .finmarkets import PoissonProcess, CreditCurve, DiscountCurve
 
 def generateCreditCurve(start_date, end_date, tenor, process=PoissonProcess, kwargs={"l":0.1}):
     """
@@ -35,9 +35,9 @@ def generateCreditCurve(start_date, end_date, tenor, process=PoissonProcess, kwa
     cc = CreditCurve(start_date, pillars, ndps)
     return cc
 
-class Bond:
+class FixedRateBond:
     """
-    A class to represent bonds
+    A class to represent fixed rate bonds
 
     Params:
     -------
@@ -61,7 +61,7 @@ class Bond:
         self.tenor = tenor
         self.debug = debug
 
-    def yield_to_maturity(self, dc):
+    def yield_to_maturity(self, dc, guess=0.1):
         def obj(y, pv):
             val = 0
             for i in range(1, len(self.payment_dates)):
@@ -72,7 +72,7 @@ class Bond:
             val += cpn/(1+y*tau)**i
             return val - pv
         pv = self.npv(dc)
-        return brentq(obj, -0.3, 1, args=(pv,))
+        return newton(obj, 0.1, args=(pv,))
 
     def duration(self, dc):
         d = 0
@@ -157,6 +157,32 @@ class Bond:
                 val += self.K*self.tau*dc.df(self.payment_dates[i])
         val += dc.df(self.payment_dates[-1])
         return self.FV*val
+
+class FloatingRateNote:
+    def __init__(self, start_date, maturity, tenor):
+        self.reset = 0
+        self.dates = generate_dates(start_date, maturity, tenor)
+        
+    def price(self, d, pillars, rates):
+        pillars = [p for p in pillars if p >= d]
+        dts = [(p-d).days/360 for p in pillars]
+        dfs = [np.exp(-dt*rates[i]) for i, dt in enumerate(dts)]
+        dc = DiscountCurve(d, pillars, dfs)
+
+        price = 0
+        for i in range(1, len(self.dates)):
+            if d > self.dates[i]:
+                continue
+            tau = (self.dates[i]-self.dates[i-1]).days/360
+            if d <= self.dates[i-1]:
+                cpn = (dc.df(self.dates[i-1])/dc.df(self.dates[i])-1)/tau
+                if d == self.dates[i-1]:
+                    self.reset = cpn
+                price += cpn*tau*dc.df(self.dates[i])
+            else:
+                price += self.reset*tau*dc.df(self.dates[i])
+        price += dc.df(self.dates[i])
+        return price
 
 class ParAssetSwap:
     """

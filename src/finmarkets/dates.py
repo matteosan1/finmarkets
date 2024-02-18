@@ -24,13 +24,13 @@ def dt_from_str(maturity, unit="m"):
 
     unit = unit.lower()
     if unit == "y":
-        return relativedelta(years=label//12)
+        return maturity//12
     elif unit == "d":
-        return relativedelta(days=int(label*30.417))
+        return int(maturity*30.417)
     elif unit != "m":
         raise ValueError(f"Unrecognized output unit {unit}")
     else:
-        return relativedelta(months=int(label))
+        return int(maturity)
 
 def maturity_from_str(maturity, unit="m"):
     """
