@@ -54,6 +54,7 @@ class DiscountCurve:
         if obs_date not in pillar_dates:
             pillar_dates = [obs_date] + pillar_dates
             discount_factors = np.insert(discount_factors, 0, 1)
+        self.pillar_dates = pillar_dates
         self.pillars = [p.toordinal() for p in pillar_dates] 
         self.log_discount_factors = np.log(discount_factors)
         self.interpolator = interp1d(self.pillars, self.log_discount_factors)
