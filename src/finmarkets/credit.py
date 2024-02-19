@@ -35,7 +35,7 @@ def generateCreditCurve(start_date, end_date, tenor, process=PoissonProcess, kwa
     cc = CreditCurve(start_date, pillars, ndps)
     return cc
 
-class Bond:
+class FixedRateBond:
     """
     A class to represent bonds
 
@@ -157,6 +157,49 @@ class Bond:
                 val += self.K*self.tau*dc.df(self.payment_dates[i])
         val += dc.df(self.payment_dates[-1])
         return self.FV*val
+        
+class FloatingRateNote:
+    def __init__(self, start_date, maturity, tenor):
+        self.reset = 0
+        self.dates = generate_dates(start_date, maturity, tenor)
+
+    def price(self, d, pillars, rates):
+        pillars = [p for p in pillars if p >= d]
+        dts = [(p-d).days/360 for p in pillars]
+        dfs = [np.exp(-dt*rates[i]) for i, dt in enumerate(dts)]
+        dc = DiscountCurve(d, pillars, dfs)
+
+        price = 0
+        for i in range(1, len(self.dates)):
+            if d > self.dates[i]:
+                continue
+            tau = (self.dates[i]-self.dates[i-1]).days/360
+            if d <= self.dates[i-1]:
+                cpn = (dc.df(self.dates[i-1])/dc.df(self.dates[i])-1)/tau
+                if d == self.dates[i-1]:
+                    self.reset = cpn
+                    price += cpn*tau*dc.df(self.dates[i])
+                else:
+                    price += self.reset*tau*dc.df(self.dates[i])
+            price += dc.df(self.dates[i])
+        return price        
+
+class CallableBond:
+    def __init__(self):
+        self.C = coupon
+        self.freq = frequency
+        self.call_price = call_price
+        self.face_value = face_value
+        self.price = price
+    
+    def f(self, y, T):
+        periods = int(T*self.freq)
+        coupon = self.C*self.face_value/self.freq
+        dt = [(i+1)/self.freq for i in range(periods)]
+        val = sum([coupon/(1+y/self.freq)**(self.freq*t) for t in dt])
+        return val + self.call_price/(1+y/self.freq)**(self.freq*max(dt))
+
+
 
 class ParAssetSwap:
     """
