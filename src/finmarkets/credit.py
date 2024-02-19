@@ -199,34 +199,6 @@ class CallableBond:
         val = sum([coupon/(1+y/self.freq)**(self.freq*t) for t in dt])
         return val + self.call_price/(1+y/self.freq)**(self.freq*max(dt))
 
-
-
-class FloatingRateNote:
-    def __init__(self, start_date, maturity, tenor):
-        self.reset = 0
-        self.dates = generate_dates(start_date, maturity, tenor)
-        
-    def price(self, d, pillars, rates):
-        pillars = [p for p in pillars if p >= d]
-        dts = [(p-d).days/360 for p in pillars]
-        dfs = [np.exp(-dt*rates[i]) for i, dt in enumerate(dts)]
-        dc = DiscountCurve(d, pillars, dfs)
-
-        price = 0
-        for i in range(1, len(self.dates)):
-            if d > self.dates[i]:
-                continue
-            tau = (self.dates[i]-self.dates[i-1]).days/360
-            if d <= self.dates[i-1]:
-                cpn = (dc.df(self.dates[i-1])/dc.df(self.dates[i])-1)/tau
-                if d == self.dates[i-1]:
-                    self.reset = cpn
-                price += cpn*tau*dc.df(self.dates[i])
-            else:
-                price += self.reset*tau*dc.df(self.dates[i])
-        price += dc.df(self.dates[i])
-        return price
-
 class ParAssetSwap:
     """
     A class to represent par asset swaps
