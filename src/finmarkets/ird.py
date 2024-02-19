@@ -1,4 +1,9 @@
-import numpy as np, tensorflow as tf
+import numpy as np
+
+try:
+    import tensorflow as tf
+except:
+    print ("Tensorflow not installed, few features won't be available")
 
 from scipy.stats import norm
 from scipy.optimize import newton

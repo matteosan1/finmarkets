@@ -178,10 +178,10 @@ class FloatingRateNote:
                 cpn = (dc.df(self.dates[i-1])/dc.df(self.dates[i])-1)/tau
                 if d == self.dates[i-1]:
                     self.reset = cpn
-                    price += cpn*tau*dc.df(self.dates[i])
-                else:
-                    price += self.reset*tau*dc.df(self.dates[i])
-            price += dc.df(self.dates[i])
+                price += cpn*tau*dc.df(self.dates[i])
+            else:
+                price += self.reset*tau*dc.df(self.dates[i])
+        price += dc.df(self.dates[i])
         return price        
 
 class CallableBond:
