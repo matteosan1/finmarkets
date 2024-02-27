@@ -25,7 +25,7 @@ def BM(mu, sigma, x0, T, tsteps, N):
     x = np.zeros(shape=(tsteps, N))
     x[0, :] = x0
     epsilon = np.random.normal(size=(tsteps-1, N))
-    x[1:, :] = epsilon*np.sqrt(T/tsteps)
+    x[1:, :] = mu*dt + sigma*epsilon*np.sqrt(T/tsteps)
     return np.cumsum(x, axis=0)
   
 def GBM(mu, sigma, X0, T, tsteps, N):
