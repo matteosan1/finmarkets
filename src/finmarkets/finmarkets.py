@@ -8,7 +8,7 @@ from scipy.optimize import brentq
 from datetime import date
 from dateutil.relativedelta import relativedelta
 
-from .dates import maturity_from_str, generate_dates
+from .dates import generate_dates
 
 def saveObj(filename, obj):
     """

@@ -3,15 +3,13 @@ import numpy as np
 from scipy.stats import norm
 from enum import IntEnum
 
-from finmarkets import maturity_from_str
-
 OptionType = IntEnum("OptionType", {"Call":1, "Put":-1})
 
 def BS(St, K, r, sigma, ttm, option_type):
     if type(ttm) == list:
-        ttm = np.array([maturity_from_str(t, "y") for t in ttm])
+        ttm = np.array([t.tau() for t in ttm])
     else:
-        ttm = maturity_from_str(ttm, "y")
+        ttm = ttm.tau()
 
     return (option_type*St*norm.cdf(option_type*d_plus(St, K, r, sigma, ttm)) - option_type*K*np.exp(-r*(ttm))*norm.cdf(option_type*d_minus(St, K, r, sigma, ttm)))
 
@@ -34,13 +32,13 @@ def call(St, K, r, sigma, ttm):
         risk free interest rate
     sigma: float
         underlying volatility
-    ttm: str or list(str)
+    ttm: Interval or list(Interval)
         time to maturity
     """
     if type(ttm) == list:
-        ttm = np.array([maturity_from_str(t, "y") for t in ttm])
+        ttm = np.array([t.tau() for t in ttm])
     else:
-        ttm = maturity_from_str(ttm, "y")
+        ttm = ttm.tau()
     return (St*norm.cdf(d_plus(St, K, r, sigma, ttm)) -
             K*np.exp(-r*(ttm))*norm.cdf(d_minus(St, K, r, sigma, ttm)))
 
@@ -58,13 +56,13 @@ def put(St, K, r, sigma, ttm):
         risk free interest rate
     sigma: float
         underlying volatility
-    ttm: str
+    ttm: Interval or list(Interval)
         time to maturity
     """
     if type(ttm) == list:
-        ttm = np.array([maturity_from_str(t, "y") for t in ttm])
+        ttm = np.array([t.tau() for t in ttm])
     else:
-        ttm = maturity_from_str(ttm, "y")
+        ttm = ttm.tau()
     return (K*np.exp(-r*(ttm))*norm.cdf(-d_minus(St, K, r, sigma, ttm)) -
             St*norm.cdf(-d_plus(St, K, r, sigma, ttm)))
     

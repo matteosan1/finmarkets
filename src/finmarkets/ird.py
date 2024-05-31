@@ -9,7 +9,7 @@ from scipy.stats import norm
 from scipy.optimize import newton
 from enum import IntEnum
 
-from .dates import generate_dates
+from .dates import generate_dates, Interval, IntervalType
 from finmarkets.options.vanilla import OptionType
 
 SwapSide = IntEnum("SwapSide", {"Receiver":1, "Payer":-1})
@@ -22,21 +22,21 @@ class FRA:
 
     Attributes:
     -----------
-    today: datetime.date
-        princing date
+    start_date: datetime.date
+        start date of the FRA
     notional: float
         notional of the swap
-    fixing_date: datetime.date
+    fixing_date: Interval
          fixing date of the contrace
-    maturity: str
+    maturity: Interval
         maturity of the FRA
     fixed_rate: float
         fixed rate to exchange
     """
-    def __init__(self, today, nominal, fixing_date, maturity, fixed_rate):
-        self.t = today
-        self.T = fixing_date
-        self.S = maturity
+    def __init__(self, start_sate, nominal, fixing_date, maturity, fixed_rate):
+        self.t = start_sate
+        self.T = fixing_date + start_sate
+        self.S = maturity + start_sate
         self.N = nominal
         self.K = fixed_rate
 
@@ -56,7 +56,7 @@ class OvernightIndexSwap:
         notional of the swap
     start_date: datetime.date
          start date of the contract
-    maturity: str
+    maturity: Interval
         maturity of the swap.
     fixed_rate: float
         rate of the fixed leg of the swap
@@ -105,7 +105,7 @@ class OvernightIndexSwap:
         dc: DiscountCurve
             discount curve to be used in the calculation
         """
-        return self.side(*self.npv_floating(dc) - self.npv_fixed(dc))
+        return self.side*(self.npv_floating(dc) - self.npv_fixed(dc))
 
     def fair_value_strike(self, dc):
         """
@@ -130,23 +130,24 @@ class InterestRateSwap:
         nominal of the swap
     start_date: datetime.date
         starting date of the contract
-    maturity: str
+    maturity: Interval
         maturity of the swap.
     fixed_rate: float
         rate of the fixed leg of the swap
-    frequency_float: str
+    frequency_float: Interval
         tenor of the float leg
-    frequency_fix: str
+    frequency_fix: Interval
         tenor of the fixed leg. default value is 1 year
     side: Side
         define the Payer or Receiver nature of the swap, default Receiver
     """    
     def __init__(self, nominal, start_date, maturity,
-                 fixed_rate, frequency_float, frequency_fix="12m", side=SwapSide.Receiver):
+                 fixed_rate, frequency_float, frequency_fix=Interval(IntervalType.Annual), 
+                 side=SwapSide.Receiver):
         self.nominal = nominal
         self.fixed_rate = fixed_rate
-        self.fix_dates = generate_dates(start_date, maturity, frequency_fix)
-        self.float_dates = generate_dates(start_date, maturity, frequency_float)
+        self.fix_dates = generate_dates(start_date, maturity.add_to(start_date), frequency_fix)
+        self.float_dates = generate_dates(start_date, maturity.add_to(start_date), frequency_float)
         self.side = side
 
     def npv_with_FRA(self, dc):
@@ -314,7 +315,7 @@ class CapFloorLet:
         nominal of the cap
     start_date: datetime.date
         starting date of the contract
-    maturity: str
+    maturity: Interval
         maturity of the cap
     fixed_rate: float
         rate of the fixed leg of the swap
@@ -324,8 +325,7 @@ class CapFloorLet:
     def __init__(self, nominal, start_date, maturity, fixed_rate, type=CapFloorType.Cap):
         self.N = nominal
         self.start = start_date
-        self.end = generate_dates(start_date, maturity, maturity)[-1]
-        #self.end = start_date + relativedelta(months=maturity_from_str(maturity, "m"))
+        self.end = start_date + maturity #generate_dates(start_date, maturity, maturity)[-1]
         self.K = fixed_rate
         self.type = type
 
@@ -364,11 +364,11 @@ class CapFloor:
         nominal of the cap
     start_date: datetime.date
         starting date of the contract
-    maturity: str
+    maturity: Interval
         maturity of the cap
     fixed_rate: float
         rate of the fixed leg of the swap
-    tenor: str
+    tenor: Interval
         tenor of the cap
     K: float
         strike of the cap
@@ -377,7 +377,7 @@ class CapFloor:
         self.dates = generate_dates(start_date, maturity, tenor)
         self.K = K
         self.type = type
-        self.maturity = maturity
+        #self.maturity = maturity
         self.tenor = tenor
         self.N = nominal
 
@@ -412,13 +412,13 @@ class InterestRateSwaption:
         start date of contract
     exercise_date: datetime.date
         exercise date of the swaptions
-    maturity: str
+    maturity: Interval
         maturity of the swap
     volatility: float
         swap rate volatility
     fixed_rate: float
         rate of the fixed leg of the swap
-    tenor: str
+    tenor: Interval
         tenor of the contract
     """
     def __init__(self, nominal, start_date, exercise_date, maturity,

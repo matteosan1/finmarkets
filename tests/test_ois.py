@@ -1,25 +1,22 @@
-import unittest
-import numpy as np
-import pandas as pd
+import unittest, numpy as np, pandas as pd
+
 from datetime import date
 from dateutil.relativedelta import relativedelta
 from scipy.optimize import minimize
-from finmarkets import DiscountCurve, OvernightIndexSwap, generate_dates
 
+from finmarkets import DiscountCurve, OvernightIndexSwap, generate_dates, Interval
 
 class Test_Credit(unittest.TestCase):
   def test_ois(self):
     obs_date = date(2023, 10, 1)
     start_date = obs_date
-    ois = OvernightIndexSwap(1e6, start_date, "3y", 0.025)
+    ois = OvernightIndexSwap(1e6, start_date, Interval("3y"), 0.025)
     
     df = pd.read_excel("https://github.com/matteosan1/finance_course/raw/develop/input_files/discount_factors_2022-10-05.xlsx")
     pillars = [obs_date + relativedelta(months=i) for i in df['months']]
     dfs = df['dfs']
-    
     curve = DiscountCurve(obs_date, pillars, dfs)
     self.assertAlmostEqual(ois.npv(curve), -2164.37, places=2)
-    #print ("OIS NPV: {:.2f}".format(ois.npv(curve)))
 
   def test_bootstrap(self):
     obs_date = date.today() 
@@ -38,7 +35,7 @@ class Test_Credit(unittest.TestCase):
       swaps = []
       for i in range(len(data)):
         swap = OvernightIndexSwap(1e5, start_date, 
-                                  "{}M".format(data.loc[i, 'months']),
+                                  Interval(f"{data.loc[i, 'months']}M"),
                                   data.loc[i, 'quotes']*0.01)
         swaps.append(swap)
         pillar_dates.append(swap.payment_dates[-1])

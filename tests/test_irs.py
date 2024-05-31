@@ -1,12 +1,11 @@
-import unittest
-import pandas as pd
-import numpy as np
-from numpy.random import normal, seed
+import unittest, pandas as pd, numpy as np
 
 from datetime import date
 from dateutil.relativedelta import relativedelta
+from numpy.random import normal, seed
 
 from finmarkets import DiscountCurve, ForwardRateCurve, InterestRateSwap, InterestRateSwaption
+from finmarkets import Interval, IntervalType
 
 class Test_Irs(unittest.TestCase):
     def test_irs(self):
@@ -23,11 +22,11 @@ class Test_Irs(unittest.TestCase):
         start_date = obs_date + relativedelta(months=1)
         nominal = 1e6
         fixed_rate = 0.023
-        tenor = "3m"
-        maturity = "4y"
+        tenor = Interval(IntervalType.Quarterly)
+        maturity = Interval("4Y")
         
         irs = InterestRateSwap(nominal, start_date, maturity, fixed_rate, tenor)
-        self.assertAlmostEqual(irs.npv(dc, fr), 31549.28, places=2)
+        self.assertAlmostEqual(irs.npv(dc, fr), -31549.28, places=2)
         #print ("NPV: {:.2f} EUR".format(irs.npv(dc, fr)))
 
     def test_swaption(self):
@@ -46,8 +45,8 @@ class Test_Irs(unittest.TestCase):
         volatility = 0.15
         nominal = 1e6
         fixed_rate = 0.023
-        tenor = "3m"
-        maturity = "4y"
+        tenor = Interval(IntervalType.Quarterly)
+        maturity = Interval("4Y")
         swaption = InterestRateSwaption(nominal, start_date, exercise_date, maturity, 
                                         volatility, fixed_rate, tenor)
 

@@ -2,15 +2,14 @@ import numpy as np
 
 from dateutil.relativedelta import relativedelta
 
-from scipy.stats import norm, binom, multivariate_normal
-from scipy.stats import chi2, t
+from scipy.stats import norm, binom, multivariate_normal, chi2, t
 from scipy.optimize import newton
 from scipy.integrate import quad
 
-from .dates import generate_dates, dates_diff, dt_from_str
+from .dates import generate_dates, Interval
 from .finmarkets import PoissonProcess, CreditCurve, DiscountCurve
 
-def generateCreditCurve(start_date, end_date, tenor, process=PoissonProcess, kwargs={"l":0.1}):
+def generateCreditCurve(start_date, maturity, tenor, process=PoissonProcess, kwargs={"l":0.1}):
     """
     A function returning a CreditCurve according to a given process.
 
@@ -18,16 +17,16 @@ def generateCreditCurve(start_date, end_date, tenor, process=PoissonProcess, kwa
     -------
     start_date: datetime.date
         start date of the credit curve
-    end_date: datetime.date
+    maturity: Interval
         end date of the credit curve
-    tenor: str
+    tenor: Interval
         string representing the curve tenor
     process: scipy.stats.rv:continuous 
         distribution of the default process (default: PoissonProcess)
     kwargs: dict
         additional parameters to be passed to the process function
     """
-    maturity = f"{round(dates_diff(start_date, end_date), 0)}m"
+    #maturity = f"{round(dates_diff(start_date, end_date), 0)}m"
     pillars = generate_dates(start_date, maturity, tenor)
     proc = process(**kwargs)
     dps = [proc.cdf((p-start_date).days/365) for p in pillars]
@@ -314,17 +313,17 @@ class CreditDefaultSwap:
         nominal of the swap
     start_date: datetime.date
         starting date of the contract
-    maturity: str
+    maturity: Interval
         maturity of the swap.
     fixed_spread: float
         the spread associated to the premium leg
-    tenor: str
+    tenor: Interval
         tenor of the premium leg, default is 3m
     recovery: float
         recovery parameter in case of default, default value is 40%
     """    
     def __init__(self, nominal, start_date, maturity, fixed_spread,
-                 tenor="3m", recovery=0.4):
+                 tenor=Interval("3m"), recovery=0.4):
         self.nominal = nominal
         self.payment_dates = generate_dates(start_date, maturity, tenor)
         self.fixed_spread = fixed_spread
@@ -509,16 +508,16 @@ class BasketDefaultSwaps:
         number of reference entities underlying the BDS
     start_date: datetime.date
         starting date of the contract
-    maturity: str
+    maturity: Interval
         maturity of the swap
     spread: float
         spread associated to the premium leg
-    tenor: str
+    tenor: Interval
         tenor of the premium leg, default is 3m
     recovery: float
         recovery parameter in case of default, default value is 40%
     """    
-    def __init__(self, nominal, N, start_date, maturity, spread, tenor="3m", recovery=0.4):
+    def __init__(self, nominal, N, start_date, maturity, spread, tenor=Interval("3m"), recovery=0.4):
         self.cds = CreditDefaultSwap(nominal, start_date, maturity,
                                      spread, tenor, recovery)
         self.N = N

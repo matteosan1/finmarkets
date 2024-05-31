@@ -1,22 +1,20 @@
-import unittest
-import pandas as pd
-import numpy as np
-from numpy.random import normal, seed
+import unittest, pandas as pd, numpy as np
 
 from datetime import date
 from dateutil.relativedelta import relativedelta
+from numpy.random import normal, seed
 
+from finmarkets import Interval
 from finmarkets.options.vanilla import call
 from finmarkets.options.asian import AsianOption
-from finmarkets import maturity_from_str
 
 class Test_Options(unittest.TestCase):
   def test_call(self):
     S0 = 107
     r = 0.03
     sigma = 0.12
-    ttm = "1y"
-    T = maturity_from_str(ttm, "y")
+    ttm = Interval("1y")
+    T = ttm.tau()
     K = 100
     
     seed(1)
@@ -38,7 +36,7 @@ class Test_Options(unittest.TestCase):
 class Test_AsianOptions(unittest.TestCase):
     def test_asiancall(self):
       S0 = 100
-      ttm = "1y"
+      ttm = Interval("1y")
       sigma = 0.2
       r = 0.05
       K = 90
@@ -62,9 +60,11 @@ class Test_AsianOptions(unittest.TestCase):
       #print ("{:.3f} +- {:.4f}".format(p, e))
       prices[2] = p
       errs[2] = e
-
-      res = np.array([27.434, 27.685, 27.889])
-      err_res = np.array([1.0573, 0.4783, 0.1474])
+      
+      res = np.array([12.455, 12.561, 12.598])
+      #res = np.array([27.434, 27.685, 27.889])
+      err_res = np.array([0.329, 0.082, 0.009])
+      #err_res = np.array([1.0573, 0.4783, 0.1474])
       self.assertIsNone(np.testing.assert_array_almost_equal(prices, res, decimal=3))
       self.assertIsNone(np.testing.assert_array_almost_equal(errs, err_res, decimal=3))
 

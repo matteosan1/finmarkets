@@ -1,7 +1,5 @@
 import numpy as np
 
-from finmarkets import maturity_from_str
-
 class CIRModel:
     """
     A class to represent the CIR model
@@ -68,5 +66,5 @@ class CIRModel:
         r0: float
             Initial value of the rate
         """
-        T = maturity_from_str(T, "y")
+        T = T.tau()
         return self._A(T)*np.exp(-r0*self._B(T))

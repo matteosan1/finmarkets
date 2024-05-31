@@ -21,29 +21,32 @@ class VasicekModel:
         self.theta = theta
         self.k = k
         self.sigma = sigma
-
-    def r_generator(self, r0, T, tsteps, N):
+        
+    def r_generator(self, r0, dates, seed=1):
         """
         Evolves the short rate
         
         Params:
         -------
         r0: float
-           initial rate value
-        T: float
-           time horizon
-        tsteps: int 
-           number of time steps in the simulation
-        N: int
-           number of realizations
+           Initial rate value
+        dates: list(datetime.date)
+           List of dates at which compute r
+        seed: int
+           Seed for the simulation (default=1)
         """
-        dt = T/tsteps
-        r = np.zeros(shape=(tsteps, N))
-        r[0, :] = r0
-        epsilon = self.sigma*np.random.normal(size=(tsteps, N))*np.sqrt(dt)
-        for i in range(1, tsteps):
-            r[i, :] = r[i-1, :]+self.k*(self.theta-r[i-1, :])*dt+epsilon[i, :]
+        if len(dates) < 2:
+            print ("You need to pass at least two dates")
+            return None
+        np.random.seed(seed)
+        dt = (dates[1] - dates[0]).days/365
+        m = len(dates)
+        r = np.zeros(shape=(m,))
+        r[0] = r0
+        for i in range(1, m):
+            r[i] = r[i-1] + self.k*(self.theta-r[i-1])*dt + self.sigma*np.random.normal()*np.sqrt(dt)
         return r
+        
     
     def B(self, t, T):
         return 1/self.k*(1-np.exp(-self.k*(T-t)))

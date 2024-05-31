@@ -1,6 +1,5 @@
-import unittest
-import pandas as pd
-import numpy as np
+import unittest, pandas as pd, numpy as np
+
 from datetime import date
 from dateutil.relativedelta import relativedelta
 

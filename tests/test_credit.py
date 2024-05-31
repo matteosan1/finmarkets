@@ -1,15 +1,12 @@
-import unittest
-import pandas as pd
-import numpy as np
-from numpy.random import normal, seed
-
-from scipy.optimize import minimize
+import unittest, pandas as pd, numpy as np
 
 from datetime import date
 from dateutil.relativedelta import relativedelta
+from numpy.random import normal, seed
+from scipy.optimize import minimize
 
 from finmarkets import DiscountCurve, CreditCurve, CreditDefaultSwap, BasketDefaultSwaps
-from finmarkets import PoissonProcess, GaussianCopula
+from finmarkets import PoissonProcess, GaussianCopula, Interval
 
 class Test_Credit(unittest.TestCase):
   def test_credit_curve(self):
@@ -31,7 +28,7 @@ class Test_Credit(unittest.TestCase):
 
     pillars = [obs_date + relativedelta(months=36)]
     credit_curve = CreditCurve(obs_date, pillars, [0.7])
-    cds = CreditDefaultSwap(1e6, start_date, "3y", 0.03)
+    cds = CreditDefaultSwap(1e6, start_date, Interval("3y"), 0.03)
     npv_prem = cds.npv_premium_leg(dc, credit_curve)
     npv_def = cds.npv_default_leg(dc, credit_curve)
     npv = cds.npv(dc, credit_curve)
@@ -92,7 +89,7 @@ class Test_Credit(unittest.TestCase):
     g = GaussianCopula(n_cds, cov)
     def_func = PoissonProcess(l=0.06)
     
-    basket = BasketDefaultSwaps(1, n_cds, obs_date, "2y", 0.01)
+    basket = BasketDefaultSwaps(1, n_cds, obs_date, Interval("2y"), 0.01)
     basket.credit_curve(3, g, def_func, obs_date, pillar_dates)
     npv = basket.npv(dc)
     self.assertAlmostEqual(npv, 0.07148635053489855, delta=0.002)

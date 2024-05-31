@@ -3,8 +3,6 @@ import numpy as np
 from scipy.stats.mstats import gmean
 from scipy.stats import norm
 
-from finmarkets import maturity_from_str
-
 class AsianOption:
     """
     A class to represents Asian Options
@@ -19,7 +17,7 @@ class AsianOption:
         risk free interest rate
     sigma: float
         underlying volatility
-    ttm: str or list(str)
+    ttm: Interval or list(Interval)
         time to maturity
     otype: int
         0 for call, 1 for put (default value 0)
@@ -27,7 +25,10 @@ class AsianOption:
     def __init__(self, S0, K, r, sigma, ttm, otype=0):
         self.S0 = S0
         self.K = K
-        self.ttm = maturity_from_str(ttm)
+        if type(ttm) == list:
+            self.ttm = np.array([t.tau() for t in ttm])
+        else:
+            self.ttm = ttm.tau()
         self.sigma = sigma
         self.r = r
         self.otype = otype

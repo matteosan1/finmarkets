@@ -1,11 +1,9 @@
 import numpy as np
 
-from finmarkets.dates import dt_from_str
 from finmarkets.stochastic import GBM
 from .vanilla import OptionType
 
 def longstaff_schwartz(S0, r, sigma, K, tsteps, T, N, side=OptionType.Call):
-    #T = dt_from_str(maturity)
     dt = T / tsteps
     df = np.exp(-r*dt)    
     S = GBM(r, sigma, S0, T, tsteps, N)
