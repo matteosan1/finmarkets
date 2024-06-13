@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 from datetime import date
 from dateutil.relativedelta import relativedelta
-from finmarkets import ForwardRateCurve, DiscountCurve
+from finmarkets import TermStructure, DiscountCurve
 
 class Test_ForwardCurve(unittest.TestCase):
     def test_forward_rate(self):
@@ -12,11 +12,10 @@ class Test_ForwardCurve(unittest.TestCase):
                         obs_date + relativedelta(months=30)]
         rates = [0.0221, 0.0241, 0.025]
 
-        fc = ForwardRateCurve(obs_date, pillar_dates, rates)
+        ts = TermStructure(obs_date, pillar_dates, rates)
         t1 = obs_date + relativedelta(months=12)
         t2 = obs_date + relativedelta(months=24)
-        self.assertAlmostEqual(fc.forward_rate(t1, t2), 0.0253, places=5)
-        #print ("F({}, {}) = {:.4f}".format(t1, t2, fc.forward_rate(t1, t2)))
+        self.assertAlmostEqual(ts.forward_rate(t1, t2), 0.0253, places=5)
 
     def test_discount(self):
         obs_date = date(2022, 10, 1)
@@ -31,7 +30,7 @@ class Test_ForwardCurve(unittest.TestCase):
         euribor = [0.005, 0.01, 0.015]
         
         estr_curve = DiscountCurve(obs_date, pillar_dates_estr, estr_dfs) 
-        euribor_curve = ForwardRateCurve(obs_date, pillar_dates_euribor, euribor) 
+        euribor_curve = TermStructure(obs_date, pillar_dates_euribor, euribor) 
 
         C = estr_curve.df(t1) * euribor_curve.forward_rate(t1, t2)
         t1_frac, r1 = euribor_curve.interp_rate(t1)
@@ -43,6 +42,6 @@ class Test_ForwardCurve(unittest.TestCase):
         #print ("C pre 2008: {:.5f}".format(C_pre2008))
 
 
-print ("\nTest ForwardRateCurve")
+print ("\nTest TermStructure")
 if __name__ == '__main__':
     unittest.main()

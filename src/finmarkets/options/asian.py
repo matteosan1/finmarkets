@@ -17,7 +17,7 @@ class AsianOption:
         risk free interest rate
     sigma: float
         underlying volatility
-    ttm: Interval or list(Interval)
+    ttm: float or list(float)
         time to maturity
     otype: int
         0 for call, 1 for put (default value 0)
@@ -26,9 +26,9 @@ class AsianOption:
         self.S0 = S0
         self.K = K
         if type(ttm) == list:
-            self.ttm = np.array([t.tau() for t in ttm])
+            self.ttm = np.array([t for t in ttm])
         else:
-            self.ttm = ttm.tau()
+            self.ttm = ttm
         self.sigma = sigma
         self.r = r
         self.otype = otype

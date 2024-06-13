@@ -7,9 +7,9 @@ OptionType = IntEnum("OptionType", {"Call":1, "Put":-1})
 
 def BS(St, K, r, sigma, ttm, option_type):
     if type(ttm) == list:
-        ttm = np.array([t.tau() for t in ttm])
+        ttm = np.array([t for t in ttm])
     else:
-        ttm = ttm.tau()
+        ttm = ttm
 
     return (option_type*St*norm.cdf(option_type*d_plus(St, K, r, sigma, ttm)) - option_type*K*np.exp(-r*(ttm))*norm.cdf(option_type*d_minus(St, K, r, sigma, ttm)))
 
@@ -32,13 +32,13 @@ def call(St, K, r, sigma, ttm):
         risk free interest rate
     sigma: float
         underlying volatility
-    ttm: Interval or list(Interval)
+    ttm: float or list(float)
         time to maturity
     """
     if type(ttm) == list:
-        ttm = np.array([t.tau() for t in ttm])
+        ttm = np.array([t for t in ttm])
     else:
-        ttm = ttm.tau()
+        ttm = ttm
     return (St*norm.cdf(d_plus(St, K, r, sigma, ttm)) -
             K*np.exp(-r*(ttm))*norm.cdf(d_minus(St, K, r, sigma, ttm)))
 
@@ -56,13 +56,13 @@ def put(St, K, r, sigma, ttm):
         risk free interest rate
     sigma: float
         underlying volatility
-    ttm: Interval or list(Interval)
+    ttm: float or list(float)
         time to maturity
     """
     if type(ttm) == list:
-        ttm = np.array([t.tau() for t in ttm])
+        ttm = np.array([t for t in ttm])
     else:
-        ttm = ttm.tau()
+        ttm = ttm
     return (K*np.exp(-r*(ttm))*norm.cdf(-d_minus(St, K, r, sigma, ttm)) -
             St*norm.cdf(-d_plus(St, K, r, sigma, ttm)))
     

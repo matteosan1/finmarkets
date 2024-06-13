@@ -449,7 +449,7 @@ class InterestRateSwaption:
         dm = (np.log(S/K) - 0.5*self.sigma**2*T)/(self.sigma*np.sqrt(T))
         return N*A*(S*norm.cdf(dp)-K*norm.cdf(dm))
     
-    def npvMC(self, obs_date, dc, fc, n_scenarios=10000, seed=1):
+    def npvMC(self, obs_date, dc, ts, n_scenarios=10000, seed=1):
         """
         Estimates the swaption NPV with Monte Carlo Simulation
         

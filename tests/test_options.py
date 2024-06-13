@@ -4,7 +4,6 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 from numpy.random import normal, seed
 
-from finmarkets import Interval
 from finmarkets.options.vanilla import call
 from finmarkets.options.asian import AsianOption
 
@@ -13,16 +12,15 @@ class Test_Options(unittest.TestCase):
     S0 = 107
     r = 0.03
     sigma = 0.12
-    ttm = Interval("1y")
-    T = ttm.tau()
+    ttm = 1
     K = 100
     
     seed(1)
     payoffs = []
     experiments = 100000
     for i in range(experiments):
-      St = S0 * np.exp((r - 0.5 * sigma * sigma) * T + sigma * np.sqrt(T) * normal())
-      payoffs.append(np.exp(-r*T)*max(0, St-K))
+      St = S0 * np.exp((r - 0.5 * sigma * sigma) *ttm + sigma * np.sqrt(ttm) * normal())
+      payoffs.append(np.exp(-r*ttm)*max(0, St-K))
 
     C_MC = np.mean(payoffs)
     cl95 =1.96*np.std(payoffs)/np.sqrt(experiments)
@@ -36,7 +34,7 @@ class Test_Options(unittest.TestCase):
 class Test_AsianOptions(unittest.TestCase):
     def test_asiancall(self):
       S0 = 100
-      ttm = Interval("1y")
+      ttm = 1
       sigma = 0.2
       r = 0.05
       K = 90

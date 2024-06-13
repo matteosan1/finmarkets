@@ -4,8 +4,7 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 from numpy.random import normal, seed
 
-from finmarkets import DiscountCurve, ForwardRateCurve, InterestRateSwap, InterestRateSwaption
-from finmarkets import Interval, IntervalType
+from finmarkets import DiscountCurve, TermStructure, InterestRateSwap, InterestRateSwaption
 
 class Test_Irs(unittest.TestCase):
     def test_irs(self):
@@ -17,16 +16,16 @@ class Test_Irs(unittest.TestCase):
         dc = DiscountCurve(obs_date, dates, discount_data.loc[:, 'dfs'])
         
         dates = [obs_date + relativedelta(months=i) for i in euribor_data['months']]
-        fr = ForwardRateCurve(obs_date, dates, euribor_data.loc[:, 'rates']*0.01)
+        ts = TermStructure(obs_date, dates, euribor_data.loc[:, 'rates']*0.01)
 
         start_date = obs_date + relativedelta(months=1)
         nominal = 1e6
         fixed_rate = 0.023
-        tenor = Interval(IntervalType.Quarterly)
-        maturity = Interval("4Y")
+        tenor = "3m"
+        maturity = "4Y"
         
         irs = InterestRateSwap(nominal, start_date, maturity, fixed_rate, tenor)
-        self.assertAlmostEqual(irs.npv(dc, fr), -31549.28, places=2)
+        self.assertAlmostEqual(irs.npv(dc, ts), -31549.28, places=2)
         #print ("NPV: {:.2f} EUR".format(irs.npv(dc, fr)))
 
     def test_swaption(self):
@@ -38,24 +37,24 @@ class Test_Irs(unittest.TestCase):
         dc = DiscountCurve(obs_date, dates, discount_data.loc[:, 'dfs'])
         
         dates = [obs_date + relativedelta(months=i) for i in euribor_data['months']]
-        fr = ForwardRateCurve(obs_date, dates, euribor_data.loc[:, 'rates']*0.01)
+        ts = TermStructure(obs_date, dates, euribor_data.loc[:, 'rates']*0.01)
 
         start_date = obs_date + relativedelta(years=1)
         exercise_date = start_date
         volatility = 0.15
         nominal = 1e6
         fixed_rate = 0.023
-        tenor = Interval(IntervalType.Quarterly)
-        maturity = Interval("4Y")
+        tenor = "3m"
+        maturity = "4Y"
         swaption = InterestRateSwaption(nominal, start_date, exercise_date, maturity, 
                                         volatility, fixed_rate, tenor)
 
-        price_mc, interval = swaption.npvMC(obs_date, dc, fr)
+        price_mc, interval = swaption.npvMC(obs_date, dc, ts)
         self.assertAlmostEqual(price_mc, 32175.18, delta=1000)
         self.assertAlmostEqual(interval, 176.39, delta=10)
         #print ("MC: {:.2f} +- {:.2f}".format(price_mc, interval))
 
-        price_bs = swaption.npvBS(obs_date, dc, fr)
+        price_bs = swaption.npvBS(obs_date, dc, ts)
         self.assertAlmostEqual(price_bs, 32384.83, places=2)
         #print ("BS: {:.2f}".format(price_bs))
 
