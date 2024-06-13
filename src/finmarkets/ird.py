@@ -9,7 +9,7 @@ from scipy.stats import norm
 from scipy.optimize import newton
 from enum import IntEnum
 
-from .dates import generate_dates, Interval, IntervalType
+from .dates import generate_dates, timeinterval
 from finmarkets.options.vanilla import OptionType
 
 SwapSide = IntEnum("SwapSide", {"Receiver":1, "Payer":-1})
@@ -26,17 +26,17 @@ class FRA:
         start date of the FRA
     notional: float
         notional of the swap
-    fixing_date: Interval
+    fixing_date: str
          fixing date of the contrace
-    maturity: Interval
+    maturity: str
         maturity of the FRA
     fixed_rate: float
         fixed rate to exchange
     """
-    def __init__(self, start_sate, nominal, fixing_date, maturity, fixed_rate):
-        self.t = start_sate
-        self.T = fixing_date + start_sate
-        self.S = maturity + start_sate
+    def __init__(self, start_date, nominal, fixing_date, maturity, fixed_rate):
+        self.t = start_date
+        self.T = start_date + timeinterval(fixing_date)
+        self.S = start_date + timeinterval(maturity)
         self.N = nominal
         self.K = fixed_rate
 
@@ -56,7 +56,7 @@ class OvernightIndexSwap:
         notional of the swap
     start_date: datetime.date
          start date of the contract
-    maturity: Interval
+    maturity: str
         maturity of the swap.
     fixed_rate: float
         rate of the fixed leg of the swap
@@ -130,24 +130,24 @@ class InterestRateSwap:
         nominal of the swap
     start_date: datetime.date
         starting date of the contract
-    maturity: Interval
+    maturity: str
         maturity of the swap.
     fixed_rate: float
         rate of the fixed leg of the swap
-    frequency_float: Interval
+    frequency_float: str
         tenor of the float leg
-    frequency_fix: Interval
+    frequency_fix: str
         tenor of the fixed leg. default value is 1 year
     side: Side
         define the Payer or Receiver nature of the swap, default Receiver
     """    
     def __init__(self, nominal, start_date, maturity,
-                 fixed_rate, frequency_float, frequency_fix=Interval(IntervalType.Annual), 
+                 fixed_rate, frequency_float, frequency_fix="1y", 
                  side=SwapSide.Receiver):
         self.nominal = nominal
         self.fixed_rate = fixed_rate
-        self.fix_dates = generate_dates(start_date, maturity.add_to(start_date), frequency_fix)
-        self.float_dates = generate_dates(start_date, maturity.add_to(start_date), frequency_float)
+        self.fix_dates = generate_dates(start_date, maturity, frequency_fix)
+        self.float_dates = generate_dates(start_date, maturity, frequency_float)
         self.side = side
 
     def npv_with_FRA(self, dc):
@@ -412,13 +412,13 @@ class InterestRateSwaption:
         start date of contract
     exercise_date: datetime.date
         exercise date of the swaptions
-    maturity: Interval
+    maturity: str
         maturity of the swap
     volatility: float
         swap rate volatility
     fixed_rate: float
         rate of the fixed leg of the swap
-    tenor: Interval
+    tenor: str
         tenor of the contract
     """
     def __init__(self, nominal, start_date, exercise_date, maturity,
@@ -459,7 +459,7 @@ class InterestRateSwaption:
             observation date
         dc: DiscountCurve
             the curve to discount the npv
-        fc: ForwardRateCurve
+        ts: TermStructure
             forward curve to compute the swap rate
         n_scenarios: int (default = 10000)
             number of Monte Carlo experiment to simulate
@@ -468,7 +468,7 @@ class InterestRateSwaption:
         """
         np.random.seed(seed)
         T = (self.exercise_date - obs_date).days/365
-        S0 = self.irs.swap_rate(dc, fc)
+        S0 = self.irs.swap_rate(dc, ts)
         S = S0 * np.exp(-self.sigma**2/2*T + self.sigma*np.random.normal(size=n_scenarios)*np.sqrt(T))
         payoffs = self.irs.nominal*np.maximum(0, S - self.irs.fixed_rate)*self.irs.annuity(dc)
         npv = np.mean(payoffs)

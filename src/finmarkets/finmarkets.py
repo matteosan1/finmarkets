@@ -104,7 +104,7 @@ class DiscountCurve:
 #    dfs = df[df_col]
 #    return DiscountCurve(obs_date, pillars, dfs)
 
-class ForwardRateCurve:
+class TermStructure:
     """
     A class to represent a forward rate curve
 
@@ -114,13 +114,13 @@ class ForwardRateCurve:
         observation date.
     pillar_dates: list(datetime.date)
         pillar dates of the forward rate curve
-    rates: list(float)
+    spot_rates: list(float)
         rates of the forward curve
     """
-    def __init__(self, obs_date, pillars, rates):
+    def __init__(self, obs_date, pillars, spot_rates):
         self.obs_date = obs_date
         self.pillars = [(p-obs_date).days/365 for p in pillars]
-        self.rates = rates
+        self.rates = spot_rates
         self.interpolator = interp1d(self.pillars, self.rates)
         
     def interp_rate(self, adate):
