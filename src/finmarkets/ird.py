@@ -7,13 +7,9 @@ except:
 
 from scipy.stats import norm
 from scipy.optimize import newton
-from enum import IntEnum
 
 from .dates import generate_dates, timeinterval
-from finmarkets.options.vanilla import OptionType
-
-SwapSide = IntEnum("SwapSide", {"Receiver":1, "Payer":-1})
-CapFloorType = IntEnum("CapFloorType", {"Cap":1, "Floor":-1})
+from .utils import OptionType, SwapSide, CapFloorType
 
 class FRA:
     """
@@ -188,7 +184,7 @@ class InterestRateSwap:
             a += tau*dc.df(self.fix_dates[i])
         return a
 
-    def npv(self, dc, fc):
+    def npv(self, dc, fc, current_date=None):
         """
         Computes the NPV of the swap
 
@@ -198,9 +194,11 @@ class InterestRateSwap:
             discount curve to be used in the calculation
         fc: ForwardRateCurve
             forward curve
+        current_date: datetime.date
+            calculation date for the annuity, if None it is set to the IRS start_date            
         """
         S = self.swap_rate(dc, fc)
-        A = self.annuity(dc)
+        A = self.annuity(dc, current_date)
         return self.side*self.nominal*(self.fixed_rate - S)*A
 
     def bpv(self, dc):
@@ -422,14 +420,15 @@ class InterestRateSwaption:
         tenor of the contract
     """
     def __init__(self, nominal, start_date, exercise_date, maturity,
-                 volatility, fixed_rate, tenor):
-        self.irs = InterestRateSwap(nominal, start_date, maturity, fixed_rate, tenor)
+                 volatility, fixed_rate, frequency_float, frequency_fix="1y", side=SwapSide.Payer):
+        self.irs = InterestRateSwap(nominal, exercise_date, maturity, fixed_rate, 
+                                    frequency_float, frequency_fix, side=side)
         self.exercise_date = exercise_date
         self.sigma = volatility
         
-    def npvBS(self, obs_date, dc, fc):
+    def npv_Black(self, obs_date, dc, ts):
         """
-        Estimates the swaption NPV using Black-Scholes formula
+        Estimates the swaption NPV using Black formula
         
         Params:
         -------
@@ -437,7 +436,7 @@ class InterestRateSwaption:
             observation date
         dc: DiscountCurve
             curve to discount the npv
-        fc: ForwardRateCurve
+        ts: TermStructure
             forward curve to compute the swap rate
         """
         T = (self.exercise_date - obs_date).days/365
@@ -449,7 +448,7 @@ class InterestRateSwaption:
         dm = (np.log(S/K) - 0.5*self.sigma**2*T)/(self.sigma*np.sqrt(T))
         return N*A*(S*norm.cdf(dp)-K*norm.cdf(dm))
     
-    def npvMC(self, obs_date, dc, ts, n_scenarios=10000, seed=1):
+    def npv_MC(self, obs_date, dc, ts, n_scenarios=10000, seed=1):
         """
         Estimates the swaption NPV with Monte Carlo Simulation
         

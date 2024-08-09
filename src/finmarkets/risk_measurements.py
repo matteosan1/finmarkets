@@ -1,5 +1,4 @@
 from scipy.integrate import quad
-
 from numpy import percentile, random
 
 def var_continuous(f, alpha=0.95):

@@ -1,9 +1,6 @@
 import numpy as np
 
 from scipy.stats import norm
-from enum import IntEnum
-
-OptionType = IntEnum("OptionType", {"Call":1, "Put":-1})
 
 def BS(St, K, r, sigma, ttm, option_type):
     if type(ttm) == list:

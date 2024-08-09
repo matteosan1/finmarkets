@@ -1,40 +1,6 @@
-import numpy as np, pickle
+import numpy as np
 
-from scipy.stats import norm, rv_continuous, binom, multivariate_normal
-from scipy.integrate import quad
 from scipy.interpolate import interp1d
-from scipy.optimize import brentq
-
-from datetime import date
-from dateutil.relativedelta import relativedelta
-
-from .dates import generate_dates
-
-def saveObj(filename, obj):
-    """
-    Utility function to pickle any "finmarkets" object
-
-    Params:
-    -------
-    filename: str
-        filename of the pickled object
-    obj: finmarkets object
-        the object to pickle
-    """
-    with open(filename, 'wb') as f:
-        pickle.dump(obj, f, 2)
-
-def loadObj(filename):
-    """
-    Utility function to unpickle any "finmarkets" object
-
-    Params:
-    -------
-    filename: str
-        filename of the object to unpickle
-    """    
-    with open(filename, "rb") as f:
-        return pickle.load(f)
 
 class DiscountCurve:
     """
@@ -70,11 +36,10 @@ class DiscountCurve:
         """
         d = adate.toordinal()
         if d < self.pillars[0] or d > self.pillars[-1]:
-            print (f"Cannot extrapolate discount factors (date: {adate}).")
-            return None
+            raise ValueError(f"Cannot extrapolate discount factors (date: {adate}).")
         return np.exp(self.interpolator(d))
     
-    def annualized_yield(self, d):
+    def rate(self, d):
         """
         Computes the annualized yield at a given date
 
@@ -84,25 +49,6 @@ class DiscountCurve:
             actual date at which calculate the yield
         """
         return -np.log(self.df(d))/((d-self.obs_date).days/365) 
-
-#def makeDCFromDataFrame(df, obs_date, pillar_col='months', df_col='dfs'):
-#    """
-#    makeDCFromDataFrame - utility to create a DiscountCurve object from a pandas.DataFrame.
-#    
-#    Params:
-#    -------
-#    df: pandas.DataFrame
-#        Input pandas.DataFrame.
-#    obs_date: datetime.date
-#        Observation date.
-#    pillar_col: str
-#        Name of the pillar column in df, default is 'months'.
-#    df_col: str
-#        Name of discount factors column in df, default is 'dfs'.
-#    """
-#    pillars = [today + relativedelta(months=i) for i in df[pillar_col]]
-#    dfs = df[df_col]
-#    return DiscountCurve(obs_date, pillars, dfs)
 
 class TermStructure:
     """
@@ -134,8 +80,7 @@ class TermStructure:
         """
         d = (adate-self.obs_date).days/365
         if d < self.pillars[0] or d > self.pillars[-1]:
-            print (f"Cannot extrapolate rates (date: {adate}).")
-            return None, None
+            raise ValuerError(f"Cannot extrapolate rates (date: {adate}).")
         else:
             return d, self.interpolator(d)
 
@@ -150,11 +95,43 @@ class TermStructure:
         """
         d1, r1 = self.interp_rate(d1)
         d2, r2 = self.interp_rate(d2)
-        if d1 is None or d2 is None:
-            return None
-        else:
-            return (r2*d2 - r1*d1)/(d2 - d1)
-    
+        return (r2*d2 - r1*d1)/(d2 - d1)
+            
+class FlatTermStructure(TermStructure):
+    """
+    A class to represent a flat rate term structure
+
+    Attributes:
+    -----------
+    obs_date: datetime.date
+        observation date.
+    end_date: list(datetime.date)
+        end date of the flat structure
+    flat_rate: list(float)
+        rate of the forward curve
+    """
+    def __init__(self, obs_date, end_date, rate):
+        self.rate = rate
+        super(FlatTermStructure, self).__init__(obs_date, [obs_date, end_date], [rate]*2)            
+
+    def forward_rate(self, d1, d2):
+        """
+        Compute the forward rate for the time period [d1, d2]
+        
+        Params:
+        -------
+        d1, d2: datetime.date
+            start and end time of the period
+        """
+        dd1 = (d1-self.obs_date).days/365
+        if dd1 < self.pillars[0] or dd1 > self.pillars[-1]:
+            raise ValueError(f"Cannot extrapolate rates (date: {d1}).")
+
+        dd2 = (d2-self.obs_date).days/365
+        if dd2 < self.pillars[0] or dd2 > self.pillars[-1]:
+            raise ValueError(f"Cannot extrapolate rates (date: {d2}).")
+        return self.rate
+        
 class CreditCurve:
     """
     A class to represents credit curves
@@ -188,8 +165,7 @@ class CreditCurve:
         """
         d_days = d.toordinal()
         if d_days < self.pillars[0] or d_days > self.pillars[-1]:
-            print (f"Cannot extrapolate survival probabilities (date: {d}).")
-            return None
+            raise ValueError(f"Cannot extrapolate survival probabilities (date: {d}).")
         return self.interpolator(d_days)
     
     def hazard(self, d):
@@ -208,63 +184,3 @@ class CreditCurve:
         delta_t = 1.0 / 365.0
         h = -1.0 / ndp_1 * (ndp_2 - ndp_1) / delta_t
         return h
-
-class PoissonProcess(rv_continuous):
-    """
-    A class to describe lambda * exp(-lambda*x) distributions, inherits from rv_continuous.
-    
-    Params:
-    -------
-    lambda: float
-        lambda parameter of the distribution
-    """
-    def __init__(self, l):
-        super().__init__()
-        self.l = l
-
-    def _cdf(self, x):
-        """
-        Reimplements the same method from parent class
-
-        Params:
-        -------
-        x: float or numpy.array
-            values where to compute the distribution CDF
-        """
-        x[x < 0] = 0
-        return (1 - np.exp(-self.l*x))
-
-    def _pdf(self, x):
-        """
-        Reimplements the same method from parent class
-
-        Params:
-        -------
-        x: float or numpy.array
-            values where to compute the distribution PDF
-        """
-        x[x < 0] = 0
-        return self.l*np.exp(-self.l*x)
-
-    def _ppf(self, x):
-        """
-        Reimplement the same method from parent class
-
-        Params:
-        -------
-        x: float or numpy.array
-            values where to compute the distribution PPF
-        """
-        return -np.log(1-x)/self.l
-
-    def default_times(self, x):
-        """
-        Returns a list of default times according to the Poisson Process
-
-        Params:
-        -------
-        x: float or numpy.array
-            set of probabilites to compute the default times
-        """
-        return self.ppf(x)
-    
