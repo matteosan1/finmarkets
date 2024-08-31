@@ -2,7 +2,7 @@ import numpy as np
 
 from scipy.stats import norm
 
-from finmarkets.options.vanilla import OptionType
+from finmarkets.utils import OptionType
 
 class VasicekModel:
     """

@@ -11,7 +11,7 @@ class Test_RiskMeasures(unittest.TestCase):
         df = pd.read_csv("https://raw.githubusercontent.com/matteosan1/finance_course/master/input_files/historical_data.csv", index_col='Date')
         df['P'] = df['aapl']*0.6 + df['nflx']*0.4
         df = df.pct_change()
-        df.dropna(inplace=True)
+        df = df.dropna()
 
         mu = df.mean() 
         sigma = df.std()

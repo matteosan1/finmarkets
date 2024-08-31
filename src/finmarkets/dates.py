@@ -1,7 +1,15 @@
 from datetime import date
 from dateutil.relativedelta import relativedelta
 
-def timeinterval(interval):
+def TimeInterval(interval):
+    """
+    Callable that translate strings into relativedeltas
+
+    Params:
+    -------
+    interval: str
+        the string representing the time interval
+    """
     tag = interval[-1].lower()
     value = int(interval[:-1])
     if tag == "d":
@@ -10,6 +18,8 @@ def timeinterval(interval):
         return relativedelta(months=value)
     elif tag == "y":
         return relativedelta(years=value)
+    else:
+        raise ValueError(f"Unable to convert {interval}, probably wrong units.")
     
 def generate_dates(start_date, end_date, frequency="1y"):
     """
@@ -25,11 +35,11 @@ def generate_dates(start_date, end_date, frequency="1y"):
         frequency of the list of dates, by default is 12 months
     """
     if isinstance(end_date, str):
-        end_date = start_date + timeinterval(end_date)
+        end_date = start_date + TimeInterval(end_date)
     d = start_date
     dates = [start_date]
     while True:
-        d += timeinterval(frequency)
+        d += TimeInterval(frequency)
         if d < end_date:
             dates.append(d)
         else:

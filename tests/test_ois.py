@@ -4,7 +4,7 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 from scipy.optimize import minimize
 
-from finmarkets import DiscountCurve, OvernightIndexSwap, generate_dates, timeinterval
+from finmarkets import DiscountCurve, OvernightIndexSwap, generate_dates, TimeInterval
 
 class Test_Credit(unittest.TestCase):
   def test_ois(self):
@@ -12,8 +12,8 @@ class Test_Credit(unittest.TestCase):
     start_date = obs_date
     ois = OvernightIndexSwap(1e6, start_date, "3y", 0.025)
     
-    df = pd.read_excel("https://github.com/matteosan1/finance_course/raw/master/input_files/discount_factors_2022-10-05.xlsx")
-    pillars = [obs_date + timeinterval(i) for i in df['months']]
+    df = pd.read_excel("https://github.com/matteosan1/finance_course/raw/develop/input_files/discount_factors_2022-10-05.xlsx")
+    pillars = [obs_date + TimeInterval(i) for i in df['maturities']]
     dfs = df['dfs']
     curve = DiscountCurve(obs_date, pillars, dfs)
     self.assertAlmostEqual(ois.npv(curve), -2164.37, places=2)
@@ -21,7 +21,6 @@ class Test_Credit(unittest.TestCase):
   def test_bootstrap(self):
     obs_date = date.today() 
     dataframe = pd.read_excel("https://github.com/matteosan1/finance_course/raw/develop/input_files/ois_2022_09_30.xlsx")
-
     def of(dfs, obs_date, pillars, swaps):
       dc = DiscountCurve(obs_date, pillars, dfs)
       val = 0
@@ -35,7 +34,7 @@ class Test_Credit(unittest.TestCase):
       swaps = []
       for i in range(len(data)):
         swap = OvernightIndexSwap(1e5, start_date, 
-                                  f"{data.loc[i, 'months']}M",
+                                  data.loc[i, 'maturities'],
                                   data.loc[i, 'quotes']*0.01)
         swaps.append(swap)
         pillar_dates.append(swap.payment_dates[-1])
@@ -53,7 +52,6 @@ class Test_Credit(unittest.TestCase):
                   0.77842018, 0.75456742, 0.73127098, 0.70888994, 0.64940464,
                   0.58284654, 0.54160531, 0.50880545, 0.44281208, 0.39008517])
     self.assertIsNone(np.testing.assert_array_almost_equal(res.x, b, decimal=4))
-    #print (res)
 
 print ("\nTest OvernightIndexSwap")
 if __name__ == '__main__':

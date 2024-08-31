@@ -4,7 +4,7 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 from numpy.random import normal, seed
 
-from finmarkets import DiscountCurve, TermStructure, InterestRateSwap, InterestRateSwaption
+from finmarkets import DiscountCurve, TermStructure, InterestRateSwap, InterestRateSwaption, TimeInterval
 
 class Test_Irs(unittest.TestCase):
     def test_irs(self):
@@ -12,10 +12,10 @@ class Test_Irs(unittest.TestCase):
         discount_data = pd.read_excel('https://github.com/matteosan1/finance_course/raw/develop/input_files/discount_factors_2022-10-05.xlsx')
         euribor_data = pd.read_excel('https://github.com/matteosan1/finance_course/raw/develop/input_files/euribor_curve.xlsx', sheet_name='EURIBOR3M')
 
-        dates = [obs_date + relativedelta(months=i) for i in discount_data['months']]
+        dates = [obs_date + TimeInterval(i) for i in discount_data['maturities']]
         dc = DiscountCurve(obs_date, dates, discount_data.loc[:, 'dfs'])
         
-        dates = [obs_date + relativedelta(months=i) for i in euribor_data['months']]
+        dates = [obs_date + TimeInterval(i) for i in euribor_data['maturities']]
         ts = TermStructure(obs_date, dates, euribor_data.loc[:, 'rates']*0.01)
 
         start_date = obs_date + relativedelta(months=1)
@@ -33,10 +33,10 @@ class Test_Irs(unittest.TestCase):
         discount_data = pd.read_excel('https://github.com/matteosan1/finance_course/raw/develop/input_files/discount_factors_2022-10-05.xlsx')
         euribor_data = pd.read_excel('https://github.com/matteosan1/finance_course/raw/develop/input_files/euribor_curve.xlsx', sheet_name='EURIBOR3M')
 
-        dates = [obs_date + relativedelta(months=i) for i in discount_data['months']]
+        dates = [obs_date + TimeInterval(i) for i in discount_data['maturities']]
         dc = DiscountCurve(obs_date, dates, discount_data.loc[:, 'dfs'])
         
-        dates = [obs_date + relativedelta(months=i) for i in euribor_data['months']]
+        dates = [obs_date + TimeInterval(i) for i in euribor_data['maturities']]
         ts = TermStructure(obs_date, dates, euribor_data.loc[:, 'rates']*0.01)
 
         start_date = obs_date + relativedelta(years=1)
@@ -49,12 +49,12 @@ class Test_Irs(unittest.TestCase):
         swaption = InterestRateSwaption(nominal, start_date, exercise_date, maturity, 
                                         volatility, fixed_rate, tenor)
 
-        price_mc, interval = swaption.npvMC(obs_date, dc, ts)
+        price_mc, interval = swaption.npv_MC(obs_date, dc, ts)
         self.assertAlmostEqual(price_mc, 32175.18, delta=1000)
         self.assertAlmostEqual(interval, 176.39, delta=10)
         #print ("MC: {:.2f} +- {:.2f}".format(price_mc, interval))
 
-        price_bs = swaption.npvBS(obs_date, dc, ts)
+        price_bs = swaption.npv_Black(obs_date, dc, ts)
         self.assertAlmostEqual(price_bs, 32384.83, places=2)
         #print ("BS: {:.2f}".format(price_bs))
 

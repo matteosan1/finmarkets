@@ -8,7 +8,7 @@ except:
 from scipy.stats import norm
 from scipy.optimize import newton
 
-from .dates import generate_dates, timeinterval
+from .dates import generate_dates, TimeInterval
 from .utils import OptionType, SwapSide, CapFloorType
 
 class FRA:
@@ -31,8 +31,8 @@ class FRA:
     """
     def __init__(self, start_date, nominal, fixing_date, maturity, fixed_rate):
         self.t = start_date
-        self.T = start_date + timeinterval(fixing_date)
-        self.S = start_date + timeinterval(maturity)
+        self.T = start_date + TimeInterval(fixing_date)
+        self.S = start_date + TimeInterval(maturity)
         self.N = nominal
         self.K = fixed_rate
 
@@ -329,7 +329,7 @@ class CapFloorLet:
 
     def npv(self, sigma, dc, fc):
         """
-        Compute the npv of the cap/floorlet using BS formula
+        Compute the npv of the cap/floorlet using Black formula
         
         Params:
         -------
@@ -442,7 +442,7 @@ class InterestRateSwaption:
         T = (self.exercise_date - obs_date).days/365
         N = self.irs.nominal
         K = self.irs.fixed_rate
-        S = self.irs.swap_rate(dc, fc)
+        S = self.irs.swap_rate(dc, ts)
         A = self.irs.annuity(dc)
         dp = (np.log(S/K) + 0.5*self.sigma**2*T)/(self.sigma*np.sqrt(T))
         dm = (np.log(S/K) - 0.5*self.sigma**2*T)/(self.sigma*np.sqrt(T))

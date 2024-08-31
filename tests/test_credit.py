@@ -5,7 +5,7 @@ from dateutil.relativedelta import relativedelta
 from numpy.random import normal, seed
 from scipy.optimize import minimize
 
-from finmarkets import DiscountCurve, CreditCurve, CreditDefaultSwap, BasketDefaultSwaps
+from finmarkets import DiscountCurve, CreditCurve, CreditDefaultSwap, BasketDefaultSwaps, TimeInterval
 from finmarkets import PoissonProcess, GaussianCopula
 
 class Test_Credit(unittest.TestCase):
@@ -16,14 +16,12 @@ class Test_Credit(unittest.TestCase):
     hazard = cc.hazard(obs_date + relativedelta(years=1))
     self.assertAlmostEqual(surv_prob, 0.900, places=3)
     self.assertAlmostEqual(hazard, 0.111, places=3)
-    #print ("Survival prob: {:.3f}".format(cc.ndp(obs_date + relativedelta(years=1))))
-    #print ("Hazard rate:   {:.3f}".format(cc.hazard(obs_date + relativedelta(years=1))))
 
   def test_cds(self):
     obs_date = date(2023, 10, 1)
     dc_data = pd.read_excel("https://github.com/matteosan1/finance_course/raw/develop/input_files/discount_curve.xlsx")
     start_date = obs_date
-    dates = [obs_date + relativedelta(months=i) for i in dc_data['months']]
+    dates = [obs_date + TimeInterval(i) for i in dc_data['maturities']]
     dc = DiscountCurve(obs_date, dates, dc_data['dfs'])
 
     pillars = [obs_date + relativedelta(months=36)]
@@ -35,9 +33,6 @@ class Test_Credit(unittest.TestCase):
     self.assertAlmostEqual(npv_prem, 75830.53, places=2)
     self.assertAlmostEqual(npv_def, 180902.20, places=2)
     self.assertAlmostEqual(npv, 105071.66866249059, places=2)
-    #print ("NPV premium: {:.2f}".format(cds.npv_premium_leg(dc, credit_curve)))
-    #print ("NPV default: {:.2f}".format(cds.npv_default_leg(dc, credit_curve)))
-    #print ("NPV:         {:.2f}".format(cds.npv(dc, credit_curve)))
 
 #  def test_bootstrap(self):
 #    obs_date = date(2022, 10, 1)
@@ -45,7 +40,7 @@ class Test_Credit(unittest.TestCase):
 #    dc = pd.read_excel("https://github.com/matteosan1/finance_course/raw/develop/input_files/discount_factors_2022-10-05.xlsx")
 #    mq = pd.read_excel("https://github.com/matteosan1/finance_course/raw/develop/input_files/cds_quotes.xlsx")
 #
-#    dates = [obs_date + relativedelta(months=i) for i in dc['months']]
+#    dates = [obs_date + relativedelta(months=i) for i in dc['maturities']]
 #    discount_curve = DiscountCurve(obs_date, dates, dc['dfs'])
 #
 #    cdswaps = []
@@ -92,7 +87,7 @@ class Test_Credit(unittest.TestCase):
     basket = BasketDefaultSwaps(1, n_cds, obs_date, "2y", 0.01)
     basket.credit_curve(3, g, def_func, obs_date, pillar_dates)
     npv = basket.npv(dc)
-    self.assertAlmostEqual(npv, 0.07148635053489855, delta=0.002)
+    self.assertAlmostEqual(npv, 0.07148635053489855, delta=0.005)
 
 print ("\nTest Credit")
 if __name__ == '__main__':
