@@ -3,6 +3,8 @@ import numpy as np
 from scipy.stats.mstats import gmean
 from scipy.stats import norm
 
+from finmarkets.utils import OptionType
+
 class AsianOption:
     """
     A class to represents Asian Options
@@ -19,10 +21,10 @@ class AsianOption:
         underlying volatility
     ttm: float or list(float)
         time to maturity
-    otype: int
-        0 for call, 1 for put (default value 0)
+    otype: OptionType enum
+        Call, Put (default value Call)
     """
-    def __init__(self, S0, K, r, sigma, ttm, otype=0):
+    def __init__(self, S0, K, r, sigma, ttm, otype=OptionType.Call):
         self.S0 = S0
         self.K = K
         if type(ttm) == list:
@@ -46,7 +48,7 @@ class AsianOption:
         rho = 0.5*(self.r-(self.sigma**2)*0.5 + adj_sigma**2)
         d1 = (np.log(self.S0/self.K)+(rho+0.5*adj_sigma**2)*self.ttm)/(adj_sigma*np.sqrt(self.ttm))
         d2 = (np.log(self.S0/self.K)+(rho-0.5*adj_sigma**2)*self.ttm)/(adj_sigma*np.sqrt(self.ttm))
-        if self.otype == 0:
+        if self.otype == OptionType.Call:
             return np.exp(-self.r*self.ttm)*(self.S0*np.exp(rho*self.ttm)*norm.cdf(d1)-self.K*norm.cdf(d2))
         else:
             return np.exp(-self.r*self.ttm)*(self.K*norm.cdf(-d2)-self.S0*np.exp(rho*self.ttm)*norm.cdf(-d1))
@@ -96,7 +98,7 @@ class AsianOption:
         S: np.array
             array with underlying price realizations
         """
-        if self.otype == 0:
+        if self.otype == OptionType.Call:
             return np.maximum(0, np.mean(S, axis=0)-self.K)
         else:
             return np.maximum(0, self.K - np.mean(S, axis=0))
@@ -110,7 +112,7 @@ class AsianOption:
         S: np.array
             array with underlying price realizations
         """
-        if self.otype == 0:
+        if self.otype == OptionType.Call:
             return np.maximum(0, gmean(S, axis=0)-self.K)
         else:
             return np.maximum(0, self.K-gmean(S, axis=0))
