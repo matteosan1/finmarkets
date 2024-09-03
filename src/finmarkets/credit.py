@@ -7,7 +7,9 @@ from scipy.optimize import newton
 from scipy.integrate import quad
 
 from .dates import generate_dates
-from .finmarkets import PoissonProcess, CreditCurve, DiscountCurve
+from .distributions import PoissonProcess
+from .curves import CreditCurve, DiscountCurve
+from .utils import SwapSide
 
 def generateCreditCurve(start_date, maturity, tenor, process=PoissonProcess, kwargs={"l":0.1}):
     """
@@ -317,17 +319,20 @@ class CreditDefaultSwap:
         maturity of the swap.
     fixed_spread: float
         the spread associated to the premium leg
-    tenor: str
+    frequency: str
         tenor of the premium leg, default is 3m
     recovery: float
         recovery parameter in case of default, default value is 40%
+    side: enum
+        side of the swap
     """    
     def __init__(self, nominal, start_date, maturity, fixed_spread,
-                 tenor="3m", recovery=0.4):
+                 frequency="3m", recovery=0.4, side=SwapSide.Buyer):
         self.nominal = nominal
-        self.payment_dates = generate_dates(start_date, maturity, tenor)
+        self.payment_dates = generate_dates(start_date, maturity, frequency)
         self.fixed_spread = fixed_spread
         self.recovery = recovery
+        self.side = side
 
     def npv_premium_leg(self, dc, cc):
         """
@@ -377,9 +382,9 @@ class CreditDefaultSwap:
         cc: CreditCurve
             the curve to extract the default probabilities
         """
-        return self.npv_default_leg(dc, cc) - self.npv_premium_leg(dc, cc)
+        return self.side*(self.npv_default_leg(dc, cc) - self.npv_premium_leg(dc, cc))
 
-    def breakevenRate(self, dc, cc):
+    def breakeven_rate(self, dc, cc):
         """
         Compute the swap breakeven
 

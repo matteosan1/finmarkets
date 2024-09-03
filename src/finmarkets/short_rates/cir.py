@@ -7,19 +7,18 @@ class CIRModel:
     Params:
     -------
     k: float
-       k paramter fo CIR model
+        k parameter of CIR model
     theta: float
-        theta paramter fo CIR model
+        theta parameter of CIR model
     sigma: float
-        sigma paramter fo CIR model
+        sigma parameter of CIR model
     """
     def __init__(self, k, theta, sigma):
         self.k = k
         self.theta = theta
         self.sigma = sigma
-        self.gamma = np.sqrt(self.k**2 + 2*self.sigma**2)
-        
-    def r_generator(self, r0, dates, seed=1):
+                
+    def r_generator(self, r0, T, steps):
         """
         Evolves the short rate
         
@@ -27,44 +26,36 @@ class CIRModel:
         -------
         r0: float
            Initial rate value
-        dates: list(datetime.date)
-           List of dates at which compute r
-        seed: int
-           Seed for the simulation (default=1)
+        T: float
+           Terminal time
+        steps: int
+           Number of steps to simulate
         """
-        if len(dates) < 2:
-            print ("You need to pass at least two dates")
-            return None
-        np.random.seed(seed)
-        dt = (dates[1] - dates[0]).days/365
-        m = len(dates)
-        r = np.zeros(shape=(m,))
-        r[0] = r0
-        for i in range(1, m):
-            r[i] = r[i-1] + self.k*(self.theta - r[i-1])*dt \
-                + self.sigma*np.random.normal()*np.sqrt(dt*r[i-1])
-        return r
-
-    def _B(self, T):
-        c = np.exp(self.gamma*T) - 1
-        return 2*c/((self.gamma + self.k)*c + 2*self.gamma)
-
-    def _A(self, T):
-        c = np.exp(self.gamma*T) - 1
-        num = 2*self.gamma*np.exp((self.k+self.gamma)*T/2)
-        den = (self.gamma + self.k)*c + 2*self.gamma
-        return np.power(num/den, 2*self.k*self.theta/self.sigma**2)
-    
-    def ZCB(self, T, r0):
-        """
-        Compute the zero coupon bond price according to CIR model
+        dt = T / steps
+        r = np.zeros(steps+1)
+        r[0] = r0 
+        for t in range(1, steps+1):
+            Z = np.random.randn()
+            dr = r[t-1]
+            r[t] = dr + self.k*(self.theta-dr)*dt + self.sigma*np.sqrt(dt)*np.sqrt(max(0, dr))*Z    
+        return r    
         
+    def ZCB(self, t, T, r0):
+        """
+        Computes the price of a zero-coupon bond with maturity T using the CIR short rate model.
+
         Params:
         -------
-        T: str
-            Maturity of the bond
+        t: float 
+            Current time.
+        T: float    
+            Maturity of the bond.
         r0: float
-            Initial value of the rate
+            Initial short rate.
         """
-        T = T.tau()
-        return self._A(T)*np.exp(-r0*self._B(T))
+        a = self.k*(self.theta - r0)
+        b = 0.5*self.sigma**2
+
+        return np.exp(-a/b*(1 - np.exp(-b*(T - t))) - 2*self.k*self.theta/self.sigma**2*(T - t + (1 - np.exp(-b*(T - t)))/b))
+
+        
