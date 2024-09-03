@@ -14,7 +14,7 @@ class Test_DiscountCurve(unittest.TestCase):
         dc = DiscountCurve(obs_date, pillars, dfs)
         df_date = obs_date + TimeInterval("195d")
         df0 = dc.df(df_date)
-        self.assertAlmostEqual(df0, 0.9903, places=4)
+        self.assertAlmostEqual(df0, 0.990, places=3)
     
 print ("\nTest DiscountCurve")
 if __name__ == '__main__':

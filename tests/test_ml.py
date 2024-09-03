@@ -12,7 +12,7 @@ class Test_ML(unittest.TestCase):
         pcaw.fit()
         cps = pcaw.components()
         ev = pcaw.explained_var()
-        self.assertTrue(np.allclose(cps, np.array([[0.707107, 0.707107], [0.707107, -0.707107]]), rtol=1e-5, atol=1e-8))
+        self.assertTrue(np.allclose(cps.values, np.array([[0.707107, -0.707107], [0.707107, 0.707107]]), rtol=1e-5, atol=1e-8))
         self.assertTrue(np.allclose(ev, np.array([0.99662716, 0.00337284]), rtol=1e-5, atol=1e-8))
 
 print ("\nTest ML")
