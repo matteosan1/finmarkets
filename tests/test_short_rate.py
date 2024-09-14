@@ -4,35 +4,35 @@ import numpy as np
 from datetime import date
 
 from finmarkets.short_rates import vasicek, cir
-from finmarkets import generate_dates
 
 class Test_ShortRate(unittest.TestCase):
     def test_vasicek(self):
         r0 = 0.03
+        np.random.seed(1)
         v = vasicek.VasicekModel(0.3, 0.10, 0.03)
         n = 1000
-
-        dates = generate_dates(date(2023, 10, 20), "1y", "1d")
-        res = []
-        dt = 1/365
+        T = 1
+        steps = 365
+        res = np.zeros(shape=(n,))
+        dt = 1/steps
         for i in range(n):
-            r = v.r_generator(r0, dates, i)
-            I = np.sum(r[1:])*dt
-            res.append(np.exp(-I))
+            r = v.r(r0, T, steps)
+            res[i] = np.exp(-np.sum(r[1:])*dt)
 
         self.assertAlmostEqual(v.ZCB(r0, 0, 1), 0.9613, places=3)
         self.assertAlmostEqual(np.mean(res), 0.9605, places=3)
-        self.assertAlmostEqual(np.std(res)/np.sqrt(n), 0.00047, places=4)
+        self.assertAlmostEqual(np.std(res)/np.sqrt(n), 0.00047, places=5)
 
-#    def test_cir(self):
-#        c = cir.CIRModel(0.3, 0.07, 0.03)
-#        dates = generate_dates(date(2023, 10, 20), "1y", "1m")
-#        r = c.r_generator(0.01875, dates, 1)
-#        b = np.array([0.01875,    0.02200044, 0.02243012, 0.02295059, 0.02272823, 0.02507336,
-#                      0.02303181, 0.02654363, 0.0265666,  0.0281279,  0.02882913, 0.03204859,
-#                      0.02979111])
-#        self.assertIsNone(np.testing.assert_array_almost_equal(r, b, decimal=4))
-#        #print (r)
+    def test_cir(self):
+        np.random.seed(1)
+        c = cir.CIRModel(0.3, 0.07, 0.03)
+        T = 1
+        steps = 12
+        r = c.r(0.02, T, steps)
+        b = np.array([0.02,0.02323941,0.02360078,0.02405806,0.02376533,0.02607657,
+                      0.023956,0.02744587,0.0274176,0.02893966,0.02959878,0.03278726])
+        self.assertIsNone(np.testing.assert_array_almost_equal(r, b, decimal=4))
+
 
 print ("\nTest Short Rates")
 if __name__ == '__main__':

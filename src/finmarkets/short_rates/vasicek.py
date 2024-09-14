@@ -22,37 +22,33 @@ class VasicekModel:
         self.k = k
         self.sigma = sigma
         
-    def r_generator(self, r0, dates, seed=1):
+    def r(self, r0, T, steps):
         """
         Evolves the short rate
         
         Params:
         -------
         r0: float
-           Initial rate value
-        dates: list(datetime.date)
-           List of dates at which compute r
-        seed: int
-           Seed for the simulation (default=1)
+           initial rate value
+        T: float
+           time interval
+        steps: int
+           simulation steps
         """
-        if len(dates) < 2:
-            print ("You need to pass at least two dates")
-            return None
-        np.random.seed(seed)
-        dt = (dates[1] - dates[0]).days/365
-        m = len(dates)
-        r = np.zeros(shape=(m,))
+        r = np.zeros(shape=(steps,))
+        dt = T/steps
         r[0] = r0
-        for i in range(1, m):
-            r[i] = r[i-1] + self.k*(self.theta-r[i-1])*dt + self.sigma*np.random.normal()*np.sqrt(dt)
+        for i in range(1, steps):
+            r[i] = r[i-1] + self.k*(self.theta-r[i-1])*dt +\
+                   self.sigma*np.random.normal()*np.sqrt(dt)
         return r
-        
-    
+            
     def B(self, t, T):
         return 1/self.k*(1-np.exp(-self.k*(T-t)))
 
     def A(self, t, T):
-        return np.exp((self.theta-self.sigma**2/(2*self.k**2))*(self.B(t, T)-T+t)-self.sigma**2/(4*self.k)*self.B(t, T)**2)
+        return np.exp((self.theta-self.sigma**2/(2*self.k**2))*\
+               (self.B(t, T)-T+t)-self.sigma**2/(4*self.k)*self.B(t, T)**2)
     
     def ZCB(self, r, t, T):
         """
@@ -70,8 +66,11 @@ class VasicekModel:
         return self.A(t, T)*np.exp(-self.B(t, T)*r)
 
     def ZBO(self, r, K, t, T, S, option_type=OptionType.Call):
-        sigma_p = self.sigma*np.sqrt((1-np.exp(-2*self.k*(T-t)))/(2*self.k))*self.B(T, S)
+        sigma_p = self.sigma*np.sqrt((1-np.exp(-2*self.k*(T-t)))/(2*self.k))*\
+                  self.B(T, S)
         h = 1/sigma_p*np.log((self.ZCB(r, t, S))/(self.ZCB(r, t, T)*K))+sigma_p/2
         arg1 = option_type*h
         arg2 = option_type*(h-sigma_p)
-        return option_type*(self.ZCB(r, t, S)*norm.cdf(arg1)-K*self.ZCB(r, t, T)*norm.cdf(arg2))
+        return option_type*(self.ZCB(r, t, S)*norm.cdf(arg1)-\
+               K*self.ZCB(r, t, T)*norm.cdf(arg2))
+    
