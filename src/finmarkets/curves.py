@@ -49,7 +49,7 @@ class DiscountCurve:
         d: datetime.date
             actual date at which calculate the yield
         """
-        return -np.log(self.df(d))/((d-self.obs_date).days/365) 
+        return -np.log(self.df(d))/((d-self.pillar_dates[0]).days/365) 
 
 class TermStructure:
     """
@@ -81,7 +81,7 @@ class TermStructure:
         """
         d = (adate-self.obs_date).days/365
         if d < self.pillars[0] or d > self.pillars[-1]:
-            raise ValuerError(f"Cannot extrapolate rates (date: {adate}).")
+            raise ValueError(f"Cannot extrapolate rates (date: {adate}).")
         else:
             return d, self.interpolator(d)
 
