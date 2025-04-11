@@ -371,7 +371,7 @@ class CreditDefaultSwap:
             d += relativedelta(days=1)
         return npv * self.nominal * (1 - self.recovery)
 
-    def npv(self, dc, cc):
+    def npv(self, cc, dc):
         """
         Valuate the CDS
 
@@ -571,7 +571,7 @@ class BasketDefaultSwaps:
         if self.cc is None:
             print ("Need to call credit_curve method first !")
             return None
-        return self.cds.npv(dc, self.cc)
+        return self.cds.npv(self.cc, dc)
     
     def breakeven(self, dc):
         """

@@ -8,5 +8,6 @@ from .ird import *
 from .credit import *
 from .stochastic import *
 from .risk_measurements import *
+from .bootstrap import *
 
 

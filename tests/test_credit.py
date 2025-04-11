@@ -3,10 +3,9 @@ import unittest, pandas as pd, numpy as np
 from datetime import date
 from dateutil.relativedelta import relativedelta
 from numpy.random import normal, seed
-from scipy.optimize import minimize
 
 from finmarkets import DiscountCurve, CreditCurve, CreditDefaultSwap, BasketDefaultSwaps, TimeInterval
-from finmarkets import PoissonProcess, GaussianCopula
+from finmarkets import PoissonProcess, GaussianCopula, Bootstrap
 
 class Test_Credit(unittest.TestCase):
   def test_credit_curve(self):
@@ -29,46 +28,30 @@ class Test_Credit(unittest.TestCase):
     cds = CreditDefaultSwap(1e6, start_date, "3y", 0.03)
     npv_prem = cds.npv_premium_leg(dc, credit_curve)
     npv_def = cds.npv_default_leg(dc, credit_curve)
-    npv = cds.npv(dc, credit_curve)
+    npv = cds.npv(credit_curve, dc)
     self.assertAlmostEqual(npv_prem, 75830.53, places=2)
     self.assertAlmostEqual(npv_def, 180902.20, places=2)
     self.assertAlmostEqual(npv, 105071.66866249059, places=2)
 
-#  def test_bootstrap(self):
-#    obs_date = date(2022, 10, 1)
-#    start_date = obs_date
-#    dc = pd.read_excel("https://github.com/matteosan1/finance_course/raw/develop/input_files/discount_factors_2022-10-05.xlsx")
-#    mq = pd.read_excel("https://github.com/matteosan1/finance_course/raw/develop/input_files/cds_quotes.xlsx")
-#
-#    dates = [obs_date + relativedelta(months=i) for i in dc['maturities']]
-#    discount_curve = DiscountCurve(obs_date, dates, dc['dfs'])
-#
-#    cdswaps = []
-#    pillar_dates = []
-#    for i in range(len(mq)):
-#      cds = CreditDefaultSwap(1e6, start_date,
-#                              "{}m".format(mq.loc[i, 'months']),
-#                              mq.loc[i, 'quotes'])
-#      cdswaps.append(cds)
-#      pillar_dates.append(cds.payment_dates[-1])
-#
-#    def objective_function(ndps, obs_date, pillar_dates, discount_curve):
-#      credit_curve = CreditCurve(obs_date, pillar_dates, ndps)
-#      sum_sq = 0
-#      for cds in cdswaps:
-#        sum_sq += cds.npv(discount_curve, credit_curve)**2
-#      return sum_sq
-#
-#    ndp_guess = [1 for _ in range(len(cdswaps))]
-#    bounds = [(0.01, 1) for _ in range(len(cdswaps))]
-#
-#    r = minimize(objective_function, ndp_guess, bounds=bounds, 
-#                 args=(obs_date, pillar_dates, discount_curve))
-#    b = np.array([0.90795, 0.80388, 0.70842, 0.47945, 0.29084, 0.06555])
-#    self.assertIsNone(np.testing.assert_array_almost_equal(r.x, b, decimal=5))
-#    #self.assertAlmostEqual(r.x, [0.90793109, 0.80383824, 0.70835319, 0.47934782, 0.29074158,
-#    #                             0.0654834], places=4)
-#    #print (r)
+  def test_bootstrap(self):
+    obs_date = date(2022, 10, 1)
+    start_date = obs_date
+    dc = pd.read_excel("https://github.com/matteosan1/finance_course/raw/develop/input_files/discount_factors_2022-10-05.xlsx")
+    mq = pd.read_excel("https://github.com/matteosan1/finance_course/raw/develop/input_files/cds_quotes.xlsx")
+
+    dates = [obs_date + TimeInterval(i) for i in dc['maturities']]
+    discount_curve = DiscountCurve(obs_date, dates, dc['dfs'])
+
+    cdswaps = []
+    pillar_dates = []
+    for i in range(len(mq)):
+      cds = CreditDefaultSwap(1e6, start_date, f"{mq.loc[i, 'maturities']}", mq.loc[i, 'quotes'])
+      cdswaps.append(cds)
+      pillar_dates.append(cds.payment_dates[-1])
+    bootstrap = Bootstrap(obs_date, cdswaps)
+    ndps = bootstrap.run(CreditCurve, kwargs={"dc":discount_curve})
+    b = np.array([np.float64(0.9759548025870117), np.float64(0.9465938653201597), np.float64(0.9172246865021909), np.float64(0.8333883968471378), np.float64(0.7370764631091287), np.float64(0.5394771422989775)])
+    self.assertIsNone(np.testing.assert_array_almost_equal(ndps, b, decimal=5))
 
   def test_bds(self):
     obs_date = date(2022, 10, 1)

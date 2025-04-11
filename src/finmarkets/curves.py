@@ -22,7 +22,8 @@ class DiscountCurve:
             pillar_dates = [obs_date] + pillar_dates
             discount_factors = np.insert(discount_factors, 0, 1)
         self.pillar_dates = pillar_dates
-        self.pillars = [p.toordinal() for p in pillar_dates] 
+        self.pillars = [p.toordinal() for p in pillar_dates]
+        self.dfs = discount_factors
         self.log_discount_factors = np.log(discount_factors)
         self.interpolator = interp1d(self.pillars, self.log_discount_factors)
         
@@ -66,6 +67,7 @@ class TermStructure:
     """
     def __init__(self, obs_date, pillars, spot_rates):
         self.obs_date = obs_date
+        self.pillars_dates = pillars
         self.pillars = [(p-obs_date).days/365 for p in pillars]
         self.rates = spot_rates
         self.interpolator = interp1d(self.pillars, self.rates)
@@ -151,6 +153,7 @@ class CreditCurve:
         if obs_date not in pillars:
             pillars = [obs_date] + pillars
             ndps = np.insert(ndps, 0, 1)
+        self.pillar_dates = pillars
         self.pillars = [d.toordinal() for d in pillars]
         self.ndps = ndps
         self.interpolator = interp1d(self.pillars, self.ndps)
