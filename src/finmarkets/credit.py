@@ -326,24 +326,23 @@ class CreditDefaultSwap:
     side: enum
         side of the swap
     """    
-    def __init__(self, nominal, start_date, maturity, fixed_spread,
-                 frequency="3m", recovery=0.4, side=SwapSide.Buyer):
+    def __init__(self, nominal, start_date, maturity, fixed_spread, frequency="3m", recovery=0.4, side=SwapSide.Buyer):
         self.nominal = nominal
         self.payment_dates = generate_dates(start_date, maturity, frequency)
         self.fixed_spread = fixed_spread
         self.recovery = recovery
         self.side = side
 
-    def npv_premium_leg(self, dc, cc):
+    def npv_premium_leg(self, cc, dc):
         """
         Valuate the premium leg
 
         Params:
         -------
-        dc: DiscountCurve 
-            the curve to discount the NPV
         cc: CreditCurve
             the curve to extract the default probabilities
+        dc: DiscountCurve 
+            the curve to discount the NPV
         """
         npv = 0
         for i in range(1, len(self.payment_dates)):
@@ -351,16 +350,16 @@ class CreditDefaultSwap:
             npv += dc.df(self.payment_dates[i]) * cc.ndp(self.payment_dates[i]) * tau
         return self.fixed_spread * npv * self.nominal
 
-    def npv_default_leg(self, dc, cc):
+    def npv_default_leg(self, cc, dc):
         """
         Valuate the default leg
 
         Params:
         -------
-        dc: DiscountCurve 
-            the curve to discount the NPV
         cc: CreditCurve
             the curve to extract the default probabilities
+        dc: DiscountCurve 
+            the curve to discount the NPV
         """
         npv = 0
         d = self.payment_dates[0]
@@ -377,26 +376,26 @@ class CreditDefaultSwap:
 
         Params:
         -------
-        dc: DiscountCurve 
-            the curve to discount the NPV
         cc: CreditCurve
             the curve to extract the default probabilities
+        dc: DiscountCurve 
+            the curve to discount the NPV
         """
-        return self.side*(self.npv_default_leg(dc, cc) - self.npv_premium_leg(dc, cc))
+        return self.side*(self.npv_default_leg(cc, dc) - self.npv_premium_leg(cc, dc))
 
-    def breakeven_rate(self, dc, cc):
+    def breakeven_rate(self, cc, dc):
         """
         Compute the swap breakeven
 
         Params:
         -------
-        dc: DiscountCurve 
-            the curve to discount the NPV
         cc: CreditCurve
             the curve to extract the default probabilities
+        dc: DiscountCurve 
+            the curve to discount the NPV
         """
-        num = self.npv_default_leg(dc, cc)
-        den = self.npv_premium_leg(dc, cc)/self.fixed_spread
+        num = self.npv_default_leg(cc, dc)
+        den = self.npv_premium_leg(cc, dc)/self.fixed_spread
         return num/den
 
 def gaussian_copula_default(N, Q, pillars, cov, n_def, simulations=10000, seed=1):
