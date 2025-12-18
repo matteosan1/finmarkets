@@ -82,7 +82,21 @@ class VasicekModel:
     #     arg1 = option_type*h
     #     arg2 = option_type*(h-sigma_p)
     #     return option_type*(self.ZCB(t, S)*norm.cdf(arg1)-K*self.ZCB(t, T)*norm.cdf(arg2))
-   
+    
+    def ZCB_analytical(self, r0, T):
+        """
+        Compute zero coupon bond prices
+      
+        Params:
+        -------
+        r0: float
+            Spot rate
+        T: float
+            Maturity (years)
+        """    
+        price = self.A(T) * np.exp(-self.B(T) * r0)
+        return price
+    
     def ZCB(self, paths, T):        
         """
         Compute zero coupon bond prices
