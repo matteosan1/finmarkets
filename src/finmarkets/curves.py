@@ -1,5 +1,7 @@
 import numpy as np
 
+from .global_const import GlobalConst
+
 from dateutil.relativedelta import relativedelta
 from scipy.interpolate import interp1d
 
@@ -9,20 +11,19 @@ class DiscountCurve:
 
     Attributes:
     -----------
-    obs_date: datetime.date
-        observation date.
     pillar_dates: list(datetime.date)
         pillars dates of the discount curve
     discount_factors: list(float)
         actual discount factors
     """
-    def __init__(self, obs_date, pillar_dates, discount_factors):
+    def __init__(self, pillar_dates, discount_factors):
         discount_factors = np.array(discount_factors)
-        if obs_date not in pillar_dates:
-            pillar_dates = [obs_date] + pillar_dates
+        if GlobalConst.OBSERVATION_DATE not in pillar_dates:
+            pillar_dates = [GlobalConst.OBSERVATION_DATE] + pillar_dates
             discount_factors = np.insert(discount_factors, 0, 1)
         self.pillar_dates = pillar_dates
-        self.pillars = [p.toordinal() for p in pillar_dates] 
+        self.pillars = [p.toordinal() for p in pillar_dates]
+        self.dfs = discount_factors
         self.log_discount_factors = np.log(discount_factors)
         self.interpolator = interp1d(self.pillars, self.log_discount_factors)
         
@@ -49,7 +50,16 @@ class DiscountCurve:
         d: datetime.date
             actual date at which calculate the yield
         """
-        return -np.log(self.df(d))/((d-self.obs_date).days/365) 
+        return -np.log(self.df(d))/((d-self.pillar_dates[0]).days/365) 
+    
+    def rates(self):
+        """
+        Computes the annualized yield corresponding to the provided discount factors
+        """
+        rs = []
+        for i in range(1, len(self.dfs)):
+            rs.append(-np.log(self.dfs[i])/((self.pillar_dates[i]-self.pillar_dates[0]).days/365))
+        return rs
 
 class TermStructure:
     """
@@ -57,16 +67,14 @@ class TermStructure:
 
     Attributes:
     -----------
-    obs_date: datetime.date
-        observation date.
     pillar_dates: list(datetime.date)
         pillar dates of the forward rate curve
     spot_rates: list(float)
         rates of the forward curve
     """
-    def __init__(self, obs_date, pillars, spot_rates):
-        self.obs_date = obs_date
-        self.pillars = [(p-obs_date).days/365 for p in pillars]
+    def __init__(self, pillars, spot_rates):
+        self.pillars_dates = pillars
+        self.pillars = [(p-GlobalConst.OBSERVATION_DATE).days/365 for p in pillars]
         self.rates = spot_rates
         self.interpolator = interp1d(self.pillars, self.rates)
         
@@ -79,9 +87,9 @@ class TermStructure:
         adate : datetime.date
             date of the interpolated rate
         """
-        d = (adate-self.obs_date).days/365
+        d = (adate-GlobalConst.OBSERVATION_DATE).days/365
         if d < self.pillars[0] or d > self.pillars[-1]:
-            raise ValuerError(f"Cannot extrapolate rates (date: {adate}).")
+            raise ValueError(f"Cannot extrapolate rates (date: {adate}).")
         else:
             return d, self.interpolator(d)
 
@@ -104,16 +112,14 @@ class FlatTermStructure(TermStructure):
 
     Attributes:
     -----------
-    obs_date: datetime.date
-        observation date.
     end_date: list(datetime.date)
         end date of the flat structure
     flat_rate: list(float)
         rate of the forward curve
     """
-    def __init__(self, obs_date, end_date, rate):
+    def __init__(self, end_date, rate):
         self.rate = rate
-        super(FlatTermStructure, self).__init__(obs_date, [obs_date, end_date], [rate]*2)            
+        super(FlatTermStructure, self).__init__([GlobalConst.OBSERVATION_DATE, end_date], [rate]*2)            
 
     def forward_rate(self, d1, d2):
         """
@@ -123,12 +129,12 @@ class FlatTermStructure(TermStructure):
         -------
         d1, d2: datetime.date
             start and end time of the period
-        """
-        dd1 = (d1-self.obs_date).days/365
+        """    
+        dd1 = (d1-self.pillars_dates[0]).days/365
         if dd1 < self.pillars[0] or dd1 > self.pillars[-1]:
             raise ValueError(f"Cannot extrapolate rates (date: {d1}).")
 
-        dd2 = (d2-self.obs_date).days/365
+        dd2 = (d2-self.pillars_dates[0]).days/365
         if dd2 < self.pillars[0] or dd2 > self.pillars[-1]:
             raise ValueError(f"Cannot extrapolate rates (date: {d2}).")
         return self.rate
@@ -139,22 +145,20 @@ class CreditCurve:
 
     Attributes:
     -----------
-    obs_date: datetime.date
-        observation date
     pillars: list(datetime.date)
         pillar dates of the curve
     ndps: list(float)
         non-default probabilities
     """    
-    def __init__(self, obs_date, pillars, ndps):
-        self.obs_date = obs_date
-        if obs_date not in pillars:
-            pillars = [obs_date] + pillars
+    def __init__(self, pillars, ndps):
+        if GlobalConst.OBSERVATION_DATE not in pillars:
+            pillars = [GlobalConst.OBSERVATION_DATE] + pillars
             ndps = np.insert(ndps, 0, 1)
+        self.pillar_dates = pillars
         self.pillars = [d.toordinal() for d in pillars]
         self.ndps = ndps
         self.interpolator = interp1d(self.pillars, self.ndps)
-        
+
     def ndp(self, d):
         """
         Interpolates non-default probability at arbitrary dates
@@ -165,7 +169,7 @@ class CreditCurve:
             the interpolation date
         """
         d_days = d.toordinal()
-        if d_days < self.pillars[0] or d_days > self.pillars[-1]:
+        if d < GlobalConst.OBSERVATION_DATE or d_days > self.pillars[-1]:
             raise ValueError(f"Cannot extrapolate survival probabilities (date: {d}).")
         return self.interpolator(d_days)
     

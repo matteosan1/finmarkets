@@ -326,8 +326,7 @@ class CreditDefaultSwap:
     side: enum
         side of the swap
     """    
-    def __init__(self, nominal, start_date, maturity, fixed_spread,
-                 frequency="3m", recovery=0.4, side=SwapSide.Buyer):
+    def __init__(self, nominal, start_date, maturity, fixed_spread, frequency="3m", recovery=0.4, side=SwapSide.Buyer):
         self.nominal = nominal
         self.payment_dates = generate_dates(start_date, maturity, frequency)
         self.fixed_spread = fixed_spread
@@ -340,10 +339,10 @@ class CreditDefaultSwap:
 
         Params:
         -------
-        dc: DiscountCurve 
-            the curve to discount the NPV
         cc: CreditCurve
             the curve to extract the default probabilities
+        dc: DiscountCurve 
+            the curve to discount the NPV
         """
         npv = 0
         for i in range(1, len(self.payment_dates)):
@@ -602,7 +601,7 @@ class BasketDefaultSwaps:
         if self.cc is None:
             print ("Need to call credit_curve method first !")
             return None
-        return self.cds.npv(dc, self.cc)
+        return self.cds.npv(self.cc, dc)
     
     def breakeven(self, dc):
         """

@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools", "wheel", 'openpyxl>=3.1.5', 'pandas>=2.1.4', 'numpy>=1.26.4', 'scipy>=1.13.1']
+build-backend = "setuptools.build_meta"
+
+# Optional: Define standard backend paths if using setup.cfg/setup.py
+# (Only needed if you are customizing directory layouts)
+# backend-path = ["."]
+
+[project]
+name = "finmarkets"
+version = "25.26.1"
+authors = [{name="Matteo Sani", email="matteo.sani@unisi.it"}]
+description = "A collection of financial tools developed during Financial Markets course at UniSi."
+readme = '# Finmarkets\n\nThis is a project developed during Financial Markets course held at UniSi.\n\nIt includes a very basic set of tools for pricing derivatives which are described and presented\nduring the course lessons.\n'
+#url = [https://github.com/matteosan1/finmarkets](https://github.com/matteosan1/finmarkets)
+license = "MIT"
+#long_license = file:LICENSE.txt
+keywords = ['financial markets', 'derivatives']
+classifiers = ['Development Status :: 5 - Production/Stable', 'Environment :: Console', 'Intended Audience :: Education', 'Programming Language :: Python :: 3.0', 'Natural Language :: English']
+requires-python = ">=3.8"
+dependencies = ['openpyxl>=3.1.5', 'pandas>=2.1.4', 'numpy>=1.26.4', 'scipy>=1.13.1']
+
+[tool.setuptools.packages]
+find = {where = ["src"]}
