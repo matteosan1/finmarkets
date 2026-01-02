@@ -334,7 +334,7 @@ class CreditDefaultSwap:
         self.recovery = recovery
         self.side = side
 
-    def npv_premium_leg(self, dc, cc):
+    def npv_premium_leg(self, cc, dc):
         """
         Valuate the premium leg
 
@@ -351,16 +351,34 @@ class CreditDefaultSwap:
             npv += dc.df(self.payment_dates[i]) * cc.ndp(self.payment_dates[i]) * tau
         return self.fixed_spread * npv * self.nominal
 
-    def npv_default_leg(self, dc, cc):
+    def npv_default_leg_quad(self, cc, dc):
         """
         Valuate the default leg
 
         Params:
         -------
-        dc: DiscountCurve 
-            the curve to discount the NPV
         cc: CreditCurve
             the curve to extract the default probabilities
+        dc: DiscountCurve 
+            the curve to discount the NPV
+        """
+        def integrand(t, cc, dc):
+            current_date = self.payment_dates[0] + relativedelta(days=int(t * 365))
+            return dc.df(current_date) * (cc.ndp(current_date) - cc.ndp(current_date + relativedelta(days=1)))
+        maturity_in_years = (self.payment_dates[-1] - self.payment_dates[0]).days / 365
+        integral, _ = quad(integrand, 0, maturity_in_years, args=(cc, dc))
+        return self.nominal * (1 - self.recovery) * integral * 365
+    
+    def npv_default_leg(self, cc, dc):
+        """
+        Valuate the default leg using integration
+
+        Params:
+        -------
+        cc: CreditCurve
+            the curve to extract the default probabilities
+        dc: DiscountCurve 
+            the curve to discount the NPV
         """
         npv = 0
         d = self.payment_dates[0]
@@ -371,32 +389,45 @@ class CreditDefaultSwap:
             d += relativedelta(days=1)
         return npv * self.nominal * (1 - self.recovery)
 
-    def npv(self, dc, cc):
+    def npv(self, cc, dc):
         """
         Valuate the CDS
 
         Params:
         -------
-        dc: DiscountCurve 
-            the curve to discount the NPV
         cc: CreditCurve
             the curve to extract the default probabilities
+        dc: DiscountCurve 
+            the curve to discount the NPV
         """
-        return self.side*(self.npv_default_leg(dc, cc) - self.npv_premium_leg(dc, cc))
+        return self.side*(self.npv_default_leg(cc, dc) - self.npv_premium_leg(cc, dc))
 
-    def breakeven_rate(self, dc, cc):
+    def npv_quad(self, cc, dc):
+        """
+        Valuate the CDS using integration
+
+        Params:
+        -------
+        cc: CreditCurve
+            the curve to extract the default probabilities
+        dc: DiscountCurve 
+            the curve to discount the NPV
+        """
+        return self.side*(self.npv_default_leg_quad(cc, dc) - self.npv_premium_leg(cc, dc))
+
+    def breakeven_rate(self, cc, dc):
         """
         Compute the swap breakeven
 
         Params:
         -------
-        dc: DiscountCurve 
-            the curve to discount the NPV
         cc: CreditCurve
             the curve to extract the default probabilities
+        dc: DiscountCurve 
+            the curve to discount the NPV
         """
-        num = self.npv_default_leg(dc, cc)
-        den = self.npv_premium_leg(dc, cc)/self.fixed_spread
+        num = self.npv_default_leg(cc, dc)
+        den = self.npv_premium_leg(cc, dc)/self.fixed_spread
         return num/den
 
 def gaussian_copula_default(N, Q, pillars, cov, n_def, simulations=10000, seed=1):
