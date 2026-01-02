@@ -6,12 +6,13 @@ from scipy.stats import norm, binom, multivariate_normal, chi2, t
 from scipy.optimize import newton
 from scipy.integrate import quad
 
+from .global_const import GlobalConst
 from .dates import generate_dates
 from .distributions import PoissonProcess
 from .curves import CreditCurve, DiscountCurve
 from .utils import SwapSide
 
-def generateCreditCurve(start_date, maturity, tenor, process=PoissonProcess, kwargs={"l":0.1}):
+def generateCreditCurve(maturity, tenor, process=PoissonProcess, kwargs={"l":0.1}):
     """
     A function returning a CreditCurve according to a given process.
 
@@ -29,11 +30,12 @@ def generateCreditCurve(start_date, maturity, tenor, process=PoissonProcess, kwa
         additional parameters to be passed to the process function
     """
     #maturity = f"{round(dates_diff(start_date, end_date), 0)}m"
+    start_date = GlobalConst.OBSERVATION_DATE
     pillars = generate_dates(start_date, maturity, tenor)
     proc = process(**kwargs)
     dps = [proc.cdf((p-start_date).days/365) for p in pillars]
     ndps = [1-dp for dp in dps]
-    cc = CreditCurve(start_date, pillars, ndps)
+    cc = CreditCurve(pillars, ndps)
     return cc
 
 class FixedRateBond:
@@ -53,10 +55,10 @@ class FixedRateBond:
     face_value: float
         face value of the bond, default value 100
     """
-    def __init__(self, start_date, K, maturity, tenor, face_value=100, debug=False):
-        self.start_date = start_date
+    def __init__(self, K, maturity, tenor, face_value=100, debug=False):
+        self.start_date = GlobalConst.OBSERVATION_DATE
         self.maturity = maturity
-        self.payment_dates = generate_dates(start_date, maturity)
+        self.payment_dates = generate_dates(self.start_date, maturity)
         self.face_value = face_value
         self.K = K
         self.tenor = tenor
@@ -558,8 +560,7 @@ class BasketDefaultSwaps:
         self.N = N
         self.cc = None
 
-    def credit_curve(self, nth_default, copula_func, default_prob, obs_date, 
-                   pillars, simulations=100000):
+    def credit_curve(self, nth_default, copula_func, default_prob, obs_date, pillars, simulations=100000):
         """
         Computes the credit curve needed for the BDS valuation
 
@@ -571,8 +572,6 @@ class BasketDefaultSwaps:
             the copula object to model correlation
         default_prob: scipy.stats.rvcontinuous
             function describing the default probability
-        obs_date: datetime.date
-            observation date
         pillars: list(datetime.date) 
             pillar dates to determine credit curve (default None)
         simulations: int
@@ -587,7 +586,7 @@ class BasketDefaultSwaps:
             entity_defs_per_sim = np.sum(default_times <= t, axis=1)
             tot_defs = np.sum(entity_defs_per_sim >= nth_default)
             ndps.append(1 - tot_defs/simulations)
-        self.cc = CreditCurve(obs_date, pillars, ndps)
+        self.cc = CreditCurve(pillars, ndps)
 
     def npv(self, dc):
         """
@@ -615,7 +614,7 @@ class BasketDefaultSwaps:
         if self.cc is None:
             print ("Need to call credit_curve method first !")
             return None
-        return self.cds.breakevenRate(dc, self.cc)
+        return self.cds.breakeven_rate(self.cc, dc)
 
 class BasketDefaultSwapsOneFactor:
     """

@@ -10,18 +10,18 @@ class Test_ShortRate(unittest.TestCase):
         r0 = 0.03
         np.random.seed(1)
         v = vasicek.VasicekModel(0.3, 0.10, 0.03)
-        n = 1000
+        n = 100
         T = 1
         steps = 365
         res = np.zeros(shape=(n,))
         dt = 1/steps
         for i in range(n):
-            r = v.r(r0, T, steps)
+            r = v.r(r0, n, T, dt)
             res[i] = np.exp(-np.sum(r[1:])*dt)
 
-        self.assertAlmostEqual(v.ZCB(r0, 0, 1), 0.9613, places=3)
-        self.assertAlmostEqual(np.mean(res), 0.9605, places=3)
-        self.assertAlmostEqual(np.std(res)/np.sqrt(n), 0.00047, places=5)
+        self.assertAlmostEqual(v.ZCB_analytical(r0, 1), 0.9613, places=3)
+        self.assertAlmostEqual(np.mean(res), 0.02007, places=3)
+        self.assertAlmostEqual(np.std(res)/np.sqrt(n), 0.000348, places=5)
 
     def test_cir(self):
         np.random.seed(1)

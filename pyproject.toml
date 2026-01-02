@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "finmarkets"
-version = "25.26.1"
+version = "25.26.2"
 authors = [{name="Matteo Sani", email="matteo.sani@unisi.it"}]
 description = "A collection of financial tools developed during Financial Markets course at UniSi."
 readme = '# Finmarkets\n\nThis is a project developed during Financial Markets course held at UniSi.\n\nIt includes a very basic set of tools for pricing derivatives which are described and presented\nduring the course lessons.\n'
