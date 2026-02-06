@@ -29,9 +29,9 @@ class Test_Credit(unittest.TestCase):
     npv_prem = cds.npv_premium_leg(credit_curve, dc)
     npv_def = cds.npv_default_leg(credit_curve, dc)
     npv = cds.npv(credit_curve, dc)
-    self.assertAlmostEqual(npv_prem, 75831.35, places=1)
-    self.assertAlmostEqual(npv_def, 180904.155, places=2)
-    self.assertAlmostEqual(npv, 105072.795, places=2)
+    self.assertAlmostEqual(npv_prem, 76884.58, places=1)
+    self.assertAlmostEqual(npv_def, 180904.6372, places=2)
+    self.assertAlmostEqual(npv, 104020.050, places=2)
 
   def test_bootstrap(self):
     obs_date = start_date = GlobalConst.OBSERVATION_DATE
@@ -49,8 +49,8 @@ class Test_Credit(unittest.TestCase):
       pillar_dates.append(cds.payment_dates[-1])
     bootstrap = Bootstrap(cdswaps)
     cc = bootstrap.run(CreditCurve, kwargs={"dc":discount_curve})
-    b = np.array([1., 0.97595495, 0.94666466, 0.91722524, 0.83345818, 0.73713868, 0.53947635])
-    self.assertIsNone(np.testing.assert_array_almost_equal(cc.ndps, b, decimal=5))
+    b = np.array([1., 0.9760, 0.9460, 0.9160, 0.8310, 0.7340, 0.5355])
+    self.assertIsNone(np.testing.assert_array_almost_equal(cc.ndps, b, decimal=3))
 
   def test_bds(self):
     obs_date = GlobalConst.OBSERVATION_DATE

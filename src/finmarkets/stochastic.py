@@ -22,9 +22,10 @@ def BM(mu, sigma, x0, T, tsteps, N):
     N: int
         number of simulations
     """
-    x = np.zeros(shape=(tsteps, N))
+    x = np.zeros(shape=(tsteps+1, N))
+    dt = T/tsteps
     x[0, :] = x0
-    epsilon = np.random.normal(size=(tsteps-1, N))
+    epsilon = np.random.normal(size=(tsteps, N))
     x[1:, :] = mu*dt + sigma*epsilon*np.sqrt(T/tsteps)
     return np.cumsum(x, axis=0)
   
@@ -47,12 +48,42 @@ def GBM(mu, sigma, X0, T, tsteps, N):
     N: int
         number of simulations
     """
-    X = np.zeros(shape=(tsteps, N))
+    X = np.zeros(shape=(tsteps+1, N))
     dt = T/tsteps
     X[0, :] = X0
-    epsilon = np.random.normal(size=(tsteps-1, N))
+    epsilon = np.random.normal(size=(tsteps, N))
     X[1:, :] = np.exp((mu-0.5*sigma**2)*dt+sigma*np.sqrt(dt)*epsilon)
     return np.cumprod(X, axis=0)
+
+def GBM_antithetic(mu, sigma, X0, T, tsteps, N):
+    """
+    Simualate Geometric Brownian motion realizations using antithetic variates.
+
+    Params:
+    -------
+    mu: float
+        drift of the process
+    sigma: float 
+        diffusion coefficient
+    X0: float
+        initial value
+    T: float 
+        length of the simulation
+    tsteps: int
+        number of steps to simulate
+    N: int
+        number of simulations
+    """
+    Xp = np.zeros(shape=(tsteps+1, N))
+    Xm = np.zeros(shape=(tsteps+1, N))
+    dt = T/tsteps
+    Xp[0, :] = X0
+    Xm[0, :] = X0
+    epsilon_p = np.random.normal(size=(tsteps, N))    
+    epsilon_m = -epsilon_p
+    Xp[1:, :] = np.exp((mu-0.5*sigma**2)*dt+sigma*np.sqrt(dt)*epsilon_m)
+    Xm[1:, :] = np.exp((mu-0.5*sigma**2)*dt+sigma*np.sqrt(dt)*epsilon_p)
+    return np.cumprod(Xp, axis=0), np.cumprod(Xm, axis=0)
 
 def GBMShifted(mu, sigma, shift, X0, T, tsteps, N):
     """

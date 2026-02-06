@@ -25,7 +25,7 @@ class Test_Irs(unittest.TestCase):
         maturity = "4Y"
         
         irs = InterestRateSwap(nominal, start_date, maturity, fixed_rate, tenor)
-        self.assertAlmostEqual(irs.npv(dc, ts), -31546.994, places=2)
+        self.assertAlmostEqual(irs.npv(dc, ts), -31418.231, places=2)
         #print ("NPV: {:.2f} EUR".format(irs.npv(dc, fr)))
 
     def test_swaption(self):
@@ -55,7 +55,7 @@ class Test_Irs(unittest.TestCase):
         #print ("MC: {:.2f} +- {:.2f}".format(price_mc, interval))
 
         price_bs = swaption.npv_Black(dc, ts)
-        self.assertAlmostEqual(price_bs, 32385.420, places=2)
+        self.assertAlmostEqual(price_bs, 32389.18, places=2)
         #print ("BS: {:.2f}".format(price_bs))
 
 print ("\nTest IRS")

@@ -1,6 +1,11 @@
-import pickle
+import pickle, importlib
 
 from enum import IntEnum
+
+def __getattr__(name):
+    if name == "tf":
+        return importlib.import_module("tensorflow")
+    raise AttributeError(f"module {__name__} has no attribute {name}")
 
 SwapSide = IntEnum("SwapSide", {"Receiver":1, "Payer":-1, "Buyer":1, "Seller":-1})
 CapFloorType = IntEnum("CapFloorType", {"Cap":1, "Floor":-1})

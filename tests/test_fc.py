@@ -37,11 +37,8 @@ class Test_ForwardCurve(unittest.TestCase):
         t1_frac, r1 = euribor_curve.interp_rate(t1)
         C_pre2008 = np.exp(-r1*t1_frac) * euribor_curve.forward_rate(t1, t2)
 
-        self.assertAlmostEqual(C, 0.015131, places=5)
-        self.assertAlmostEqual(C_pre2008, 0.0152157, places=5)
-        #print ("C post 2008: {:.5f}".format(C))
-        #print ("C pre 2008: {:.5f}".format(C_pre2008))
-
+        self.assertAlmostEqual(C, 0.0151149, places=5)
+        self.assertAlmostEqual(C_pre2008, 0.0151980, places=5)
 
 print ("\nTest TermStructure")
 if __name__ == '__main__':

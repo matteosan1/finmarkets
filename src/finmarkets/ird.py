@@ -1,6 +1,6 @@
 import numpy as np
 
-try:
+try:   
     import tensorflow as tf
 except:
     print ("Tensorflow not installed, few features won't be available")
@@ -8,7 +8,7 @@ except:
 from scipy.stats import norm
 from scipy.optimize import newton
 
-from .dates import generate_dates, TimeInterval
+from .dates import generate_dates, TimeInterval, DayCount
 from .global_const import GlobalConst
 from .utils import OptionType, SwapSide, CapFloorType
 
@@ -24,21 +24,22 @@ class FRA:
     notional: float
         notional of the swap
     fixing_date: str
-         fixing date of the contrace
+         fixing date of the contract
     maturity: str
         maturity of the FRA
     fixed_rate: float
         fixed rate to exchange
     """
-    def __init__(self, start_date, nominal, fixing_date, maturity, fixed_rate):
+    def __init__(self, start_date, nominal, fixing_date, maturity, fixed_rate, day_count=DayCount.ACT360):
         self.t = start_date
         self.T = start_date + TimeInterval(fixing_date)
         self.S = start_date + TimeInterval(maturity)
         self.N = nominal
         self.K = fixed_rate
+        self.day_count = day_count
 
     def npv(self, dc):
-        tau = (self.S - self.T).days/360
+        tau = (self.S - self.T).days/self.day_count
         P_tS = dc.df(self.S)
         P_tT = dc.df(self.T)
         return self.N*(P_tS*tau*self.K - P_tT + P_tS)
@@ -60,11 +61,12 @@ class OvernightIndexSwap:
     side: Side
         Payer or Receiver type, default Receiver
     """
-    def __init__(self, nominal, start_date, maturity, fixed_rate, side=SwapSide.Receiver):
+    def __init__(self, nominal, start_date, maturity, fixed_rate, side=SwapSide.Receiver, day_count=DayCount.ACT360):
         self.nominal = nominal
         self.fixed_rate = fixed_rate
         self.payment_dates = generate_dates(start_date, maturity)
         self.side = side
+        self.day_count = day_count
       
     def npv_floating(self, dc):
         """
@@ -89,7 +91,7 @@ class OvernightIndexSwap:
         val = 0
         for i in range(1, len(self.payment_dates)):
             val += dc.df(self.payment_dates[i]) * \
-                    (self.payment_dates[i] - self.payment_dates[i-1]).days/360 
+                    (self.payment_dates[i] - self.payment_dates[i-1]).days/self.day_count 
         return self.nominal*self.fixed_rate*val
   
     def npv(self, dc):
@@ -138,12 +140,13 @@ class InterestRateSwap:
     side: Side
         define the Payer or Receiver nature of the swap, default Receiver
     """    
-    def __init__(self, nominal, start_date, maturity, fixed_rate, frequency_float, frequency_fix="1y", side=SwapSide.Receiver):
+    def __init__(self, nominal, start_date, maturity, fixed_rate, frequency_float, frequency_fix="1y", side=SwapSide.Receiver, day_count=DayCount.ACT360):
         self.nominal = nominal
         self.fixed_rate = fixed_rate
         self.fix_dates = generate_dates(start_date, maturity, frequency_fix)
         self.float_dates = generate_dates(start_date, maturity, frequency_float)
         self.side = side
+        self.day_count = day_count
 
     # def npv_with_FRA(self, dc):
     #     """
@@ -174,7 +177,7 @@ class InterestRateSwap:
         for i in range(1, len(self.fix_dates)):
             if GlobalConst.OBSERVATION_DATE > self.fix_dates[i]:
                 continue
-            tau = (self.fix_dates[i]-self.fix_dates[i-1]).days/360
+            tau = (self.fix_dates[i]-self.fix_dates[i-1]).days/self.day_count
             a += tau*dc.df(self.fix_dates[i])
         return a
 
@@ -194,7 +197,7 @@ class InterestRateSwap:
             if GlobalConst.OBSERVATION_DATE > self.float_dates[j]:
                 continue
             F = fc.forward_rate(self.float_dates[j], self.float_dates[j-1])
-            tau = (self.float_dates[j] - self.float_dates[j-1]).days / 360
+            tau = (self.float_dates[j] - self.float_dates[j-1]).days / self.day_count
             D = dc.df(self.float_dates[j])
             num += F * tau * D
         return num/self.annuity(dc)
@@ -241,61 +244,61 @@ class InterestRateSwap:
     #         den += dc.df(self.fix_dates[i])*tau
     #     return num/den
 
-class Swap:
-    def __init__(self, notional, fixed_rate, tau, terms, float_rates, zero_rate):
-        self.N = notional
-        self.K = fixed_rate
-        self.tau = tau
-        self.terms = terms
-        self.float_rates = float_rates
-        self.r = zero_rate
+# class Swap:
+#     def __init__(self, notional, fixed_rate, tau, terms, float_rates, zero_rate):
+#         self.N = notional
+#         self.K = fixed_rate
+#         self.tau = tau
+#         self.terms = terms
+#         self.float_rates = float_rates
+#         self.r = zero_rate
         
-    def swap_price(self, float_rates_dot=0, r_dot=0):
-        fixed_pv = tf.Variable(0.0)
-        r = tf.Variable(self.r, name="r")
-        float_pv = tf.Variable(0.0)
-        float_rates = tf.Variable(self.float_rates, name="float_rates")
+#     def swap_price(self, float_rates_dot=0, r_dot=0):
+#         fixed_pv = tf.Variable(0.0)
+#         r = tf.Variable(self.r, name="r")
+#         float_pv = tf.Variable(0.0)
+#         float_rates = tf.Variable(self.float_rates, name="float_rates")
 
-        with tf.GradientTape(persistent=True) as tape:
-            for i in range(len(self.terms)):
-                fixed_pv = fixed_pv + self.N*self.K*self.tau*tf.math.exp(-r*self.terms[i])
-                if r_dot != 0:
-                    fixed_pv_dot = r_dot*tape.gradient(fixed_pv, r)
-                else:
-                    fixed_pv_dot = 0
+#         with tf.GradientTape(persistent=True) as tape:
+#             for i in range(len(self.terms)):
+#                 fixed_pv = fixed_pv + self.N*self.K*self.tau*tf.math.exp(-r*self.terms[i])
+#                 if r_dot != 0:
+#                     fixed_pv_dot = r_dot*tape.gradient(fixed_pv, r)
+#                 else:
+#                     fixed_pv_dot = 0
 
-        with tf.GradientTape(persistent=True) as tape:
-            for j in range(len(self.terms)):
-                float_pv = float_pv + self.N*float_rates[j]*self.tau*tf.math.exp(-r*self.terms[j])
-        float_pv_dot = 0
-        if r_dot != 0:
-            float_pv_dot += r_dot*tape.gradient(float_pv, r)
-        if float_rates_dot != 0:
-            float_pv_dot += sum(tape.gradient(float_pv, float_rates)*float_rates_dot)
+#         with tf.GradientTape(persistent=True) as tape:
+#             for j in range(len(self.terms)):
+#                 float_pv = float_pv + self.N*float_rates[j]*self.tau*tf.math.exp(-r*self.terms[j])
+#         float_pv_dot = 0
+#         if r_dot != 0:
+#             float_pv_dot += r_dot*tape.gradient(float_pv, r)
+#         if float_rates_dot != 0:
+#             float_pv_dot += sum(tape.gradient(float_pv, float_rates)*float_rates_dot)
 
-        swap_pv = (fixed_pv - float_pv)
-        swap_pv_dot = (fixed_pv_dot - float_pv_dot)
+#         swap_pv = (fixed_pv - float_pv)
+#         swap_pv_dot = (fixed_pv_dot - float_pv_dot)
 
-        return swap_pv, swap_pv_dot
+#         return swap_pv, swap_pv_dot
 
-    def swap_price_tangent_mode_manual(self, float_rates_dot, r_dot):
-        fixed_pv = 0.0
-        fixed_pv_dot = 0.0
+#     def swap_price_tangent_mode_manual(self, float_rates_dot, r_dot):
+#         fixed_pv = 0.0
+#         fixed_pv_dot = 0.0
 
-        for i in range(len(self.terms)):
-            fixed_pv += self.N*self.K*self.tau*np.exp(-self.r*self.terms[i])
-            fixed_pv_dot += -self.terms[i]*self.N*self.K*self.tau*np.exp(-self.r*self.terms[i])*r_dot
+#         for i in range(len(self.terms)):
+#             fixed_pv += self.N*self.K*self.tau*np.exp(-self.r*self.terms[i])
+#             fixed_pv_dot += -self.terms[i]*self.N*self.K*self.tau*np.exp(-self.r*self.terms[i])*r_dot
 
-        float_pv = 0.0;
-        float_pv_dot = 0.0
-        for j in range(len(self.terms)):
-            float_pv += self.N*(self.float_rates[j])*self.tau*np.exp(-self.r*self.terms[j])
-            float_pv_dot += self.N*self.tau*np.exp(-self.r*self.terms[j])*float_rates_dot
-            float_pv_dot += -self.terms[j]*self.N*(self.float_rates[j])*self.tau*np.exp(-self.r*self.terms[j])*r_dot
+#         float_pv = 0.0;
+#         float_pv_dot = 0.0
+#         for j in range(len(self.terms)):
+#             float_pv += self.N*(self.float_rates[j])*self.tau*np.exp(-self.r*self.terms[j])
+#             float_pv_dot += self.N*self.tau*np.exp(-self.r*self.terms[j])*float_rates_dot
+#             float_pv_dot += -self.terms[j]*self.N*(self.float_rates[j])*self.tau*np.exp(-self.r*self.terms[j])*r_dot
             
-        swap_pv = (fixed_pv - float_pv)
-        swap_pv_dot = (fixed_pv_dot - float_pv_dot)
-        return swap_pv, swap_pv_dot
+#         swap_pv = (fixed_pv - float_pv)
+#         swap_pv_dot = (fixed_pv_dot - float_pv_dot)
+#         return swap_pv, swap_pv_dot
     
 class CapFloorLet:
     """
@@ -314,12 +317,13 @@ class CapFloorLet:
     type: CapFloorType
         indicate if it is a caplet or a floorlet
     """    
-    def __init__(self, nominal, start_date, maturity, fixed_rate, type=CapFloorType.Cap):
+    def __init__(self, nominal, start_date, maturity, fixed_rate, type=CapFloorType.Cap, day_count=DayCount.ACT360):
         self.N = nominal
         self.start = start_date
         self.end = start_date + maturity #generate_dates(start_date, maturity, maturity)[-1]
         self.K = fixed_rate
         self.type = type
+        self.day_count = day_count
 
     def npv(self, sigma, dc, fc):
         """
@@ -334,10 +338,10 @@ class CapFloorLet:
         fc: ForwardRateCurve
             interest rate term structure
         """
-        tau = (self.end - self.start).days/360
+        #tau = (self.end - self.start).days/self.day_count
         D = dc.df(self.end)
         F = fc.forward_rate(self.start, self.end)
-        Tf = (self.start - dc.pillar_dates[0]).days/360
+        Tf = (self.start - dc.pillar_dates[0]).days/self.day_count
         v = sigma*np.sqrt(Tf)
         d1 = (np.log(F/self.K)+0.5*v**2)/v
         d2 = (np.log(F/self.K)-0.5*v**2)/v
@@ -365,13 +369,14 @@ class CapFloor:
     K: float
         strike of the cap
     """    
-    def __init__(self, nominal, start_date, maturity, tenor, K, type=CapFloorType.Cap):
+    def __init__(self, nominal, start_date, maturity, tenor, K, type=CapFloorType.Cap, day_count=DayCount.ACT360):
         self.dates = generate_dates(start_date, maturity, tenor)
         self.K = K
         self.type = type
         #self.maturity = maturity
         self.tenor = tenor
         self.N = nominal
+        self.day_count = day_count
 
     def npv(self, sigma, dc, fc):
         """
@@ -388,7 +393,7 @@ class CapFloor:
         """
         val = 0
         for i in range(0, len(self.dates)-1):
-            caplet = CapFloorLet(self.N, self.dates[i], self.tenor, self.K, self.type)
+            caplet = CapFloorLet(self.N, self.dates[i], self.tenor, self.K, self.type, self.day_count)
             val += caplet.npv(sigma, dc, fc)
         return val
     
@@ -413,10 +418,11 @@ class InterestRateSwaption:
     tenor: str
         tenor of the contract
     """
-    def __init__(self, nominal, exercise_date, maturity, volatility, fixed_rate, frequency_float, frequency_fix="1y", side=SwapSide.Payer):
-        self.irs = InterestRateSwap(nominal, exercise_date, maturity, fixed_rate, frequency_float, frequency_fix, side=side)
+    def __init__(self, nominal, exercise_date, maturity, volatility, fixed_rate, frequency_float, frequency_fix="1y", side=SwapSide.Payer, day_count=DayCount.ACT360):
+        self.irs = InterestRateSwap(nominal, exercise_date, maturity, fixed_rate, frequency_float, frequency_fix, side=side, day_count=day_count)
         self.exercise_date = exercise_date
         self.sigma = volatility
+        self.day_count = day_count
         
     def npv_Black(self, dc, ts):
         """
@@ -429,7 +435,7 @@ class InterestRateSwaption:
         ts: TermStructure
             forward curve to compute the swap rate
         """
-        T = (self.exercise_date - GlobalConst.OBSERVATION_DATE).days/365
+        T = (self.exercise_date - GlobalConst.OBSERVATION_DATE).days/self.day_count
         N = self.irs.nominal
         K = self.irs.fixed_rate
         S = self.irs.swap_rate(dc, ts)
@@ -454,7 +460,7 @@ class InterestRateSwaption:
             seed for the random number generator
         """
         np.random.seed(seed)
-        T = (self.exercise_date - GlobalConst.OBSERVATION_DATE).days/365
+        T = (self.exercise_date - GlobalConst.OBSERVATION_DATE).days/self.day_count
         S0 = self.irs.swap_rate(dc, ts)
         S = S0 * np.exp(-self.sigma**2/2*T + self.sigma*np.random.normal(size=n_scenarios)*np.sqrt(T))
         payoffs = self.irs.nominal*np.maximum(0, S - self.irs.fixed_rate)*self.irs.annuity(dc)
@@ -491,16 +497,4 @@ class SwaptionShortRate:
             val += self.model.ZBO(r, K_k, 0, T-1, T, self.option_type)*K_k*self.tenor
         val += self.model.ZBO(r, K_k, 0, T-1, T, self.option_type)
         return val
-
-  # def jamshidian_decomposition(expiry, tenor, strike, a, sigma):
-  #   """
-  #   Performs Jamshidian's decomposition to find the critical rate.
-  #   """
-  #   def integrand(t):
-  #     return zero_bond(0, t) * stats.norm.pdf(
-  #       (np.log(zero_bond(t, expiry + tenor) / zero_bond(t, expiry)) + (a**2 * tenor) / (2 * sigma**2)) /
-  #       (sigma * np.sqrt(tenor) / a)
-  #     )
-  #   kappa = quad(integrand, 0, expiry)[0]
-  #   return forward_swap_rate(expiry, tenor) + (sigma**2 * tenor * kappa) / (2 * a)
-
+    

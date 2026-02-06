@@ -1,13 +1,13 @@
 import numpy as np
 
 from dateutil.relativedelta import relativedelta
-
+from itertools import pairwise
 from scipy.stats import norm, binom, multivariate_normal, chi2, t
 from scipy.optimize import newton
 from scipy.integrate import quad
 
 from .global_const import GlobalConst
-from .dates import generate_dates
+from .dates import generate_dates, DayCount
 from .distributions import PoissonProcess
 from .curves import CreditCurve, DiscountCurve
 from .utils import SwapSide
@@ -170,7 +170,7 @@ class FloatingRateNote:
         pillars = [p for p in pillars if p >= d]
         dts = [(p-d).days/360 for p in pillars]
         dfs = [np.exp(-dt*rates[i]) for i, dt in enumerate(dts)]
-        dc = DiscountCurve(d, pillars, dfs)
+        dc = DiscountCurve(pillars, dfs)
 
         price = 0
         for i in range(1, len(self.dates)):
@@ -203,110 +203,86 @@ class CallableBond:
         return val + self.call_price/(1+y/self.freq)**(self.freq*max(dt))
 
 class ParAssetSwap:
-    """
-    A class to represent par asset swaps
+    def __init__(self, bond_price, nominal, coupon_rate, maturity, asw_spread, frequency="1y", day_count=DayCount.ACT360):
+        """
+        A class representing Par Asset Swaps
 
-    Attributes:
-    -----------
-    bond_price: float
-        market price of the underlying bond
-    bond: Bond
-        bond object underlying the asset swap
-    tenor_float: str
-        tenor of the float leg of the swap
-    dc: DiscountCurve
-        discount curve for pricing
-    fc: ForwardRateCurve
-        forward curve to value float leg
-    """    
-    def __init__(self, bond_price, bond, tenor_float, dc, fc, debug=False):
-        self.bond = bond
-        self.nominal = bond.face_value
-        self.fixed_rate = bond.K
-        self.fixed_dates = bond.payment_dates
-        self.float_dates = generate_dates(bond.start_date, bond.maturity, tenor_float)
-        self.dc = dc
-        self.fc = fc
-        self.debug = debug
+        Attributes:
+        -----------
+        :param bond_price: float
+            Bond current market value (e.g. 98.5)
+        :param coupon_rate: float
+            Bond annual coupon
+        :param maturity: str
+            Maturity of the contract        
+        :param asw_spread: float
+            Asset swap spread
+        :param frequency: str
+            Coupon frequency
+        """
+        self.coupon_rate = coupon_rate
         self.bond_price = bond_price
-        self.asspread()
+        self.nominal = nominal
+        self.maturity = maturity
+        self.s = asw_spread        
+        start_date = GlobalConst.OBSERVATION_DATE
+        self.payment_dates = generate_dates(start_date, maturity, frequency)
+        self.day_count = day_count
+
+    def npv_fixed_leg(self, dc):
+        """
+        Evaluate the current bond value
     
-    def asspread(self):
+        Params:
+        -------
+        dc: DiscountCurve
+            discount curve to be used in the calculation
         """
-        Computes asset swap spread
+        npv = 0
+        for d0, d1 in pairwise(self.payment_dates):
+            tau = (d1 - d0).days/self.day_count
+            npv += self.coupon_rate*tau*dc.df(d1)
+        npv += dc.df(d1)
+
+        return self.nominal*npv
+
+    def npv_floating_leg(self, dc, fc, s=None):
+        """
+        Evaluate the swap value, by default receive variable+spread, pay bond coupon
+        Usually it should compensate the difference between Par and current bond price
 
         Params:
         -------
+        dc: DiscountCurve
+            discount curve to be used in the calculation
+        s: float
+            custom spread, set only when determing the asset swap spread
         """
-        A = self.annuity()
-        s = ((self.bond.npv(self.dc) - self.bond_price)/A)/self.bond.face_value
-        self.spread = s
-
-    def annuity(self):
+        spread = s if s is not None else self.s
+        npv = 0
+        for d0, d1 in pairwise(self.payment_dates):
+            tau = (d1 - d0).days/self.day_count
+            npv += (fc.forward_rate(d0, d1) + spread) * dc.df(d1) * tau        
+        npv += dc.df(d1)
+        return self.nominal*npv
+    
+    def par_par_adjustment(self):
+        return self.nominal * (100 - self.bond_price)/100
+    
+    def npv(self, dc, fc, s=None):
         """
-        Computes the annuity
-
-        Params:
-        -------
-        """
-        a = 0
-        for i in range(1, len(self.fixed_dates)):
-            tau = (self.fixed_dates[i] - self.fixed_dates[i-1]).days / 360
-            a += self.dc.df(self.fixed_dates[i])*tau
-        return a
-
-    def swap_rate(self):
-        """ 
-        Computes swap rate
-
-        Params:
-        -------
-        """
-        A = self.annuity()
-        num = 0
-        for j in range(1, len(self.float_dates)):
-            F = self.fc.forward_rate(self.float_dates[j], self.float_dates[j-1])
-            tau = (self.float_dates[j] - self.float_dates[j-1]).days / 360
-            D = self.dc.df(self.float_dates[j])
-            num += (F+self.spread) * tau * D
-        return num/A
-
-    def npv(self):
-        """
-        Computes the swap NPV
+        Evaluate the asset swap
         
         Params:
         -------
+        dc: DiscountCurve
+            discount curve to be used in the calculation
         """
-        S = self.swap_rate()
-        A = self.annuity()
-        return (self.bond_price-self.bond.face_value) + self.nominal * (S - self.fixed_rate) * A
-
-    def float_flows(self):
-        val = 0
-        for i in range(1, len(self.float_dates)):
-            F = self.fc.forward_rate(self.float_dates[i], self.float_dates[i-1])
-            tau = (self.float_dates[i] - self.float_dates[i-1]).days / 360
-            cpn = (F+self.spread)*self.nominal*tau
-            if self.debug:
-                print ("Swap Fixed: ", self.float_dates[i], cpn)
-            val += cpn*dc.df(self.floating_leg_dates[i])
-        if self.debug:
-            print ("Total float", val)
-        return val
-
-    def fixed_flows(self):
-        val = 0
-        for i in range(1, len(self.fixed_dates)):
-            tau = (self.fixed_dates[i] - self.fixed_dates[i-1]).days / 360
-            cpn = self.fixed_rate*self.nominal*tau
-            if self.debug:
-                print ("Swap Fixed: ", i, cpn)
-            val += cpn*dc.df(self.fixed_dates[i])
-        if self.debug:
-            print ("Total fixed ", val)
-        return val
-    
+        return self.npv_fixed_leg(dc) - self.npv_floating_leg(dc, fc, s) + self.par_par_adjustment()
+        
+    def solve_spread(self, dc, fc):                
+        return newton(lambda s: self.npv(dc, fc, s), x0=0.1)
+        
 class CreditDefaultSwap:
     """
     A class to represent Credit Default Swaps
@@ -328,12 +304,13 @@ class CreditDefaultSwap:
     side: enum
         side of the swap
     """    
-    def __init__(self, nominal, start_date, maturity, fixed_spread, frequency="3m", recovery=0.4, side=SwapSide.Buyer):
+    def __init__(self, nominal, start_date, maturity, fixed_spread, frequency="3m", recovery=0.4, side=SwapSide.Buyer, day_count=DayCount.ACT360):
         self.nominal = nominal
         self.payment_dates = generate_dates(start_date, maturity, frequency)
         self.fixed_spread = fixed_spread
         self.recovery = recovery
         self.side = side
+        self.day_count = day_count
 
     def npv_premium_leg(self, cc, dc):
         """
@@ -348,7 +325,7 @@ class CreditDefaultSwap:
         """
         npv = 0
         for i in range(1, len(self.payment_dates)):
-            tau = (self.payment_dates[i] - self.payment_dates[i-1]).days/365
+            tau = (self.payment_dates[i] - self.payment_dates[i-1]).days/self.day_count
             npv += dc.df(self.payment_dates[i]) * cc.ndp(self.payment_dates[i]) * tau
         return self.fixed_spread * npv * self.nominal
 
@@ -364,11 +341,11 @@ class CreditDefaultSwap:
             the curve to discount the NPV
         """
         def integrand(t, cc, dc):
-            current_date = self.payment_dates[0] + relativedelta(days=int(t * 365))
+            current_date = self.payment_dates[0] + relativedelta(days=int(t * self.day_count))
             return dc.df(current_date) * (cc.ndp(current_date) - cc.ndp(current_date + relativedelta(days=1)))
-        maturity_in_years = (self.payment_dates[-1] - self.payment_dates[0]).days / 365
+        maturity_in_years = (self.payment_dates[-1] - self.payment_dates[0]).days / self.day_count
         integral, _ = quad(integrand, 0, maturity_in_years, args=(cc, dc))
-        return self.nominal * (1 - self.recovery) * integral * 365
+        return self.nominal * (1 - self.recovery) * integral * self.day_count
     
     def npv_default_leg(self, cc, dc):
         """
@@ -384,9 +361,7 @@ class CreditDefaultSwap:
         npv = 0
         d = self.payment_dates[0]
         while d < self.payment_dates[-1]:
-            npv += dc.df(d) * (
-                   cc.ndp(d) -
-                   cc.ndp(d + relativedelta(days=1)))
+            npv += dc.df(d) * (cc.ndp(d) - cc.ndp(d + relativedelta(days=1)))
             d += relativedelta(days=1)
         return npv * self.nominal * (1 - self.recovery)
 
@@ -554,11 +529,11 @@ class BasketDefaultSwaps:
     recovery: float
         recovery parameter in case of default, default value is 40%
     """    
-    def __init__(self, nominal, N, start_date, maturity, spread, tenor="3m", recovery=0.4):
-        self.cds = CreditDefaultSwap(nominal, start_date, maturity,
-                                     spread, tenor, recovery)
+    def __init__(self, nominal, N, start_date, maturity, spread, tenor="3m", recovery=0.4, side=SwapSide.Buyer, day_count=DayCount.ACT360):
+        self.cds = CreditDefaultSwap(nominal, start_date, maturity, spread, tenor, recovery, side, day_count)
         self.N = N
         self.cc = None
+        self.day_count = day_count
 
     def credit_curve(self, nth_default, copula_func, default_prob, obs_date, pillars, simulations=100000):
         """
@@ -580,7 +555,7 @@ class BasketDefaultSwaps:
         copula_sample = copula_func.sample(simulations)
         default_times = default_prob.ppf(copula_sample)
 
-        Ts = [(p-obs_date).days/365 for p in pillars]
+        Ts = [(p-obs_date).days/self.day_count for p in pillars]
         ndps = []
         for t in Ts:
             entity_defs_per_sim = np.sum(default_times <= t, axis=1)
@@ -692,7 +667,7 @@ class BasketDefaultSwapsOneFactor:
             number of "required" default in the basket definition
         """        
         s = quad(self.one_factor_model, -np.inf, np.inf, 
-                 args=(self.cds.breakevenRate, Q_dates, Q, dc, ndefaults))
+                 args=(self.cds.breakeven_rate, Q_dates, Q, dc, ndefaults))
         return s[0]
     
     def npv(self, obs_date, Q_dates, Q, dc, ndefaults):

@@ -1,5 +1,7 @@
-from datetime import date
 from dateutil.relativedelta import relativedelta
+from enum import IntEnum
+
+DayCount = IntEnum("DayCount", {"ACT360":360, "ACT365":365})
 
 def TimeInterval(interval):
     """

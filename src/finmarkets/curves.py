@@ -1,6 +1,7 @@
 import numpy as np
 
 from .global_const import GlobalConst
+from .dates import DayCount
 
 from dateutil.relativedelta import relativedelta
 from scipy.interpolate import interp1d
@@ -16,7 +17,7 @@ class DiscountCurve:
     discount_factors: list(float)
         actual discount factors
     """
-    def __init__(self, pillar_dates, discount_factors):
+    def __init__(self, pillar_dates, discount_factors, day_count=DayCount.ACT365):
         discount_factors = np.array(discount_factors)
         if GlobalConst.OBSERVATION_DATE not in pillar_dates:
             pillar_dates = [GlobalConst.OBSERVATION_DATE] + pillar_dates
@@ -26,6 +27,7 @@ class DiscountCurve:
         self.dfs = discount_factors
         self.log_discount_factors = np.log(discount_factors)
         self.interpolator = interp1d(self.pillars, self.log_discount_factors)
+        self.day_count = day_count
         
     def df(self, adate):
         """
@@ -50,7 +52,7 @@ class DiscountCurve:
         d: datetime.date
             actual date at which calculate the yield
         """
-        return -np.log(self.df(d))/((d-self.pillar_dates[0]).days/365) 
+        return -np.log(self.df(d))/((d-self.pillar_dates[0]).days/self.day_count) 
     
     def rates(self):
         """
@@ -58,7 +60,7 @@ class DiscountCurve:
         """
         rs = []
         for i in range(1, len(self.dfs)):
-            rs.append(-np.log(self.dfs[i])/((self.pillar_dates[i]-self.pillar_dates[0]).days/365))
+            rs.append(-np.log(self.dfs[i])/((self.pillar_dates[i]-self.pillar_dates[0]).days/self.day_count))
         return rs
 
 class TermStructure:
@@ -72,11 +74,12 @@ class TermStructure:
     spot_rates: list(float)
         rates of the forward curve
     """
-    def __init__(self, pillars, spot_rates):
+    def __init__(self, pillars, spot_rates, day_count=DayCount.ACT365):
         self.pillars_dates = pillars
-        self.pillars = [(p-GlobalConst.OBSERVATION_DATE).days/365 for p in pillars]
+        self.pillars = [(p-GlobalConst.OBSERVATION_DATE).days/day_count for p in pillars]
         self.rates = spot_rates
         self.interpolator = interp1d(self.pillars, self.rates)
+        self.day_count = day_count
         
     def interp_rate(self, adate):
         """
@@ -87,7 +90,7 @@ class TermStructure:
         adate : datetime.date
             date of the interpolated rate
         """
-        d = (adate-GlobalConst.OBSERVATION_DATE).days/365
+        d = (adate-GlobalConst.OBSERVATION_DATE).days/self.day_count
         if d < self.pillars[0] or d > self.pillars[-1]:
             raise ValueError(f"Cannot extrapolate rates (date: {adate}).")
         else:
@@ -117,9 +120,10 @@ class FlatTermStructure(TermStructure):
     flat_rate: list(float)
         rate of the forward curve
     """
-    def __init__(self, end_date, rate):
+    def __init__(self, end_date, rate, day_count=DayCount.ACT365):
         self.rate = rate
-        super(FlatTermStructure, self).__init__([GlobalConst.OBSERVATION_DATE, end_date], [rate]*2)            
+        self.day_count = day_count
+        super(FlatTermStructure, self).__init__([GlobalConst.OBSERVATION_DATE, end_date], [rate]*2, day_count)            
 
     def forward_rate(self, d1, d2):
         """
@@ -130,11 +134,11 @@ class FlatTermStructure(TermStructure):
         d1, d2: datetime.date
             start and end time of the period
         """    
-        dd1 = (d1-self.pillars_dates[0]).days/365
+        dd1 = (d1-self.pillars_dates[0]).days/self.day_count
         if dd1 < self.pillars[0] or dd1 > self.pillars[-1]:
             raise ValueError(f"Cannot extrapolate rates (date: {d1}).")
 
-        dd2 = (d2-self.pillars_dates[0]).days/365
+        dd2 = (d2-self.pillars_dates[0]).days/self.day_count
         if dd2 < self.pillars[0] or dd2 > self.pillars[-1]:
             raise ValueError(f"Cannot extrapolate rates (date: {d2}).")
         return self.rate
